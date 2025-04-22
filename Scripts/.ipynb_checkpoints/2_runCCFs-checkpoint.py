@@ -1,0 +1,124 @@
+# Generate Data Set with Given Parameters
+import os
+from glob import glob
+import argparse
+import numpy as np
+from astropy.io import fits
+from astropy.time import Time
+from tqdm import tqdm
+
+import sys
+sys.path.append('../')
+from utils import solar_dir
+from ccf import ccf, ccfFit, g2_mask
+
+def main():
+    
+    parser = argparse.ArgumentParser(description='Generate CCF files for ESSP IV spectra')
+    
+    # Specify data set(s) for which to run CCFs
+    parser.add_argument('-d','--data-set',nargs='*',default=[],
+                        help='Numbers of data sets to run CCFs for')
+    parser.add_argument('--overwrite', action='store_true',
+                        help="Overwrite existing files")
+    
+    # Use iCCF code (over EXPRES pipeline code)
+    parser.add_argument('--iccf', action='store_true',
+                        help="Use iCCF code (over EXPRES pipeline code)")
+    
+    # CCF Parameters
+    parser.add_argument('--mask_file',type=str,default=g2_mask,
+                        help='File name of CCF mask to use')
+    parser.add_argument('--vrange',type=int,default=12,
+                        help='+/- range of velocity grid in km/s')
+    parser.add_argument('--v0',type=float,default=3,
+                        help='Center of velocity grid in km/s')
+    parser.add_argument('--vspacing',type=float,default=.4,
+                        help='Velocity spacing in km/s')
+    # EXPRES CCF Specific
+    parser.add_argument('--vwidth',default=None,
+                        help='Automatic velocity width of the mask')
+    parser.add_argument('--npix',type=float,default=4,
+                        help='Number of pixels to use around the nominal CCF window')
+    # iCCF Specific
+    parser.add_argument('--mask_width',type=float,default=0.5,
+                        help='Mask width for iCCF')
+    
+    # CCF Fitting
+    parser.add_argument('--fit-range',type=int,default=12,
+                        help='+/- range of velocity grid to include in fit in km/s')
+    parser.add_argument('--sigma_v',type=float,default=3,
+                        help='Initial guess of sigma for the CCF Gaussian Fit in km/s')
+    parser.add_argument('--rv_guess',type=float,default=1.5,
+                        help='Initial guess of mean for the CCF Gaussian Fit in km/s')
+    
+    args = parser.parse_args()
+    
+    # Gather Files
+    if not args.data_set:
+        file_list = glob(os.path.join(solar_dir,'DataSets','*','*','Spectra','*.fits'))
+    else:
+        file_list = []
+        for dset_num in args.data_set:
+            file_list.append(glob(os.path.join(solar_dir,'DataSets','*',f'DS{dset_num}','Spectra','*.fits')))
+        file_list = np.concatenate(file_list)
+    file_list = np.sort(file_list)
+    
+    # Different parameters for EXPRES CCF and iCCF
+    ccf_params = {
+        'mask_file':str(args.mask_file),
+        'vrange':float(args.vrange),
+        'v0':float(args.v0),
+        'vspacing':float(args.vspacing),
+    }
+    if args.iccf:
+        ccf_params = {'mask_width':float(args.mask_width)}
+    else:
+        ccf_params = {'vwidth':args.vwidth,'npix':int(args.npix)}
+    
+    for file in tqdm(file_list):
+        ccf_file = file.replace('Spectra','CCFs').replace('_spec_','_ccfs_')
+        if os.path.isfile(ccf_file) and not args.overwrite:
+            continue
+        time, v_grid, ccfs, e_ccfs, orders = ccf(file,use_iccf=args.iccf,**ccf_params)
+        ccf_rv, ccf_rv_e, ccf_dict = ccfFit(v_grid,ccfs,e_ccfs,orders,
+                                            vrange=float(args.fit_range),
+                                            sigma_v=float(args.sigma_v),
+                                            rv_guess=float(args.rv_guess))
+        if np.isnan(ccf_rv):
+            ccf_rv, ccf_rv_e = 'NaN', 'NaN'
+        else:
+            ccf_rv, ccf_rv_e = np.around(ccf_rv,3), np.around(ccf_rv_e,3)
+
+        ccf_head = fits.Header()
+        ccf_head['time'] = (time, 'Time of observation [eMJD]')
+        ccf_head['date-ccf'] = (Time.now().fits, 'Time of CCF calculation')
+        ccf_head['pipeline'] = 'iCCF' if args.iccf else 'EXPRES'
+        ccf_head['rv'] = (ccf_rv, 'Best-fit CCF RV in m/s')
+        ccf_head['e_rv'] = (ccf_rv_e, 'CCF RV Error m/s')
+        for key in ccf_params:
+            ccf_head[key] = (ccf_params[key], ccf_head_comments[key])
+        ccf_head['sigma_v'] = (float(args.sigma_v), 'Initial guess of sigma in km/s')
+        ccf_head['rv_guess'] = (float(args.rv_guess), 'Initial guess of mean in km/s')
+        
+        ### Save FITS File
+        hdu = fits.PrimaryHDU(data=None,header=ccf_head)
+        hdu_list = [hdu]
+        for key in ccf_dict.keys():
+            hdu_list.append(fits.ImageHDU(data=ccf_dict[key],name=key))
+        fits.HDUList(hdu_list).writeto(ccf_file,overwrite=True)
+        tqdm.write(ccf_file)
+
+ccf_head_comments = {
+    'mask_file': 'CCF mask file used',
+    'vrange': '+/- range of velcity in km/s',
+    'v0': 'Center of velocity grid in km/s',
+    'vspacing': 'Velocity spacing in km/s',
+    'mask_width': 'Mask width for iCCF in ?',
+    'vwidth': 'Automatic velocity width of the mask in km/s',
+    'npix': 'Number of pixels used around CCF window',
+}
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main())
