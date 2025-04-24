@@ -281,24 +281,27 @@ def readL2(file_name,pad_orders=False):
             inst_dir += '_wBlaze'
         file_name = os.path.join(solar_dir,inst_dir,file_name)
     
-    hdus = fits.open(file_name)
     if inst in ['harps','harpsn','harpn','harps-n']: # HARPS or HARPS-North
-        if '_wBlaze' in file_name: # save spectra w/ blaze; then work with no blaze data
-            spec = hdus['scidata'].data.copy()
-            hdus.close()
+        
+        # Get HDUS w/ and w/o Blaze
+        if '_wBlaze' in file_name:
             hdus = fits.open(getHarpsNoBlazeFile(file_name))
-        else: # find and open spectra w/ blaze
-            blaze_file = getHarpsBlazeFile(file_name)
-            blaz_hdus = fits.open(blaze_file)
-            spec = blaz_hdus['scidata'].data.copy()
-            blaz_hdus.close()
+            blaz_hdus = fits.open(file_name)
+        else:
+            hdus = fits.open(file_name)
+            blaz_hdus = fits.open(getHarpsBlazeFile(file_name))
         
         wave = hdus['wavedata_vac_bary'].data.copy()
+        spec = blaz_hdus['scidata'].data.copy()
         spec_woB = hdus['scidata'].data.copy()
-        errs = hdus['errdata'].data.copy()
+        errs = blaz_hdus['errdata'].data.copy()
         
         blaz = spec/spec_woB
+        
+        blaz_hdus.close()
+        hdus.close()
     elif inst=='neid': # NEID
+        hdus = fits.open(file_name)
         # The first 12 and last 4 orders of the NEID data are never any good
         wave = hdus['SCIWAVE'].data[12:-4].copy()
         # Correct each order for the barycentric correction
@@ -310,7 +313,9 @@ def readL2(file_name,pad_orders=False):
         blaz = hdus['SCIBLAZE'].data[12:-4].copy()
         spec = hdus['SCIFLUX'].data[12:-4].copy()
         errs = np.sqrt(hdus['SCIVAR'].data[12:-4].copy())
+        hdus.close()
     else: # EXPRES Pipeline Format
+        hdus = fits.open(file_name)
         wave = hdus[1].data['bary_wavelength'].copy()
         cont = hdus[1].data['continuum'].copy()
         blaz = hdus[1].data['blaze'].copy()
@@ -318,7 +323,7 @@ def readL2(file_name,pad_orders=False):
         errs = hdus[1].data['uncertainty'].copy()*blaz
         wave[np.isnan(spec)] = np.nan
         #tell = hdus[1].data['tellurics'].copy()
-    hdus.close()
+        hdus.close()
     
     if pad_orders:
         wave, spec, errs, blaz = [padOrders(drp_arr.copy(),inst) for drp_arr in [wave,spec,errs,blaz]]
