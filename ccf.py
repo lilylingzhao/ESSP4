@@ -12,8 +12,9 @@ from data import readCCF
 from expres.rv.ccf import generate_ccf_mask, order_wise_ccfs
 from iCCF.meta import espdr_compute_CCF_fast
 
-#g2_mask = '/Users/lilyzhao/Documents/ceph/CCF_Masks/ESPRESSO/ESPRESSO_G2.fits'
-g2_mask = '/mnt/home/lzhao/ceph/ESPRESSO_MaskFiles/ESPRESSO_G2.fits'
+default_mask_file = os.path.join(mask_dir,'NEID_G2.fits')
+#default_mask_file = os.path.join(mask_dir,'ESPRESSO_G2.fits')
+
 
 # =============================================================================
 # iCCF
@@ -34,7 +35,7 @@ def vactoair(wvln):
 
 def iccf(wave,spec,errs,blaz,berv,qual=None,
          vrange=20,v0=0,vspacing=.4,
-         mask_file=g2_mask,
+         mask_file=default_mask_file,
          bervmax=32,mask_width=0.5):
     
     # Need to mask out all NaNs for it to work
@@ -46,7 +47,7 @@ def iccf(wave,spec,errs,blaz,berv,qual=None,
     v_grid = v0 + np.arange(-vrange, vrange+vspacing*0.5, vspacing)
 
     # Element-wise difference in wavelength
-    ll = vactoair(wave[m].copy())
+    ll = wave[m].copy()
     dll = np.diff(ll)
     dll = np.r_[dll, dll[-1]] # pad by repeating last element
 
@@ -67,9 +68,12 @@ def iccf(wave,spec,errs,blaz,berv,qual=None,
 # =============================================================================
 # EXPRES CCF
 
+# Default width of CCF mask lines for each instrument in m/s
+vwidth_dict = {'harps':.82,'harpsn':.82,'expres':.56,'neid':1.}
+
 def eccf_orderwise(wvln,spec,errs,echl_ord0=161,
-                   mask_file=g2_mask,npix=10,
-                   vrange=20,v0=0,vspacing=.4,vwidth=None,
+                   mask_file=default_mask_file,npix=10,
+                   vrange=20,v0=0,vspacing=.4,vwidth=0.82,
                    window='box',ccor=False):
     
     # Mask out <=0 and NaN values
@@ -78,10 +82,9 @@ def eccf_orderwise(wvln,spec,errs,echl_ord0=161,
     pix_mask = np.logical_and(mask1,mask2)
     
     # Get CCF Mask (code assumes CGS)
-    vwidth = vwidth if vwidth is None else vwidth*1e5
     _, masks = generate_ccf_mask(mask_file, wvln,
-                                 vspacing=vspacing*1e5,
-                                 vwidth=vwidth,
+                                 vspacing=vspacing*1e5, # km/s -> cm/s
+                                 vwidth=vwidth*1e5,
                                  vrange=vrange*1e5,
                                  v0=v0*1e5)
     
@@ -105,7 +108,7 @@ def Model_Gaussian(x, A, μ, σ, C):
     """
     return A * np.exp(-(x - μ)**2 / 2 / σ**2) + C
 
-fit_opts = {'xtol':1e-8, 'gtol':1e-8, 'ftol':1e-8, 'factor':1.}
+fit_opts = {'xtol':1e-10, 'gtol':1e-10, 'ftol':1e-10, 'factor':1.}
 def fit_rv(v_grid, ccf, e_ccf, vrange=12, sigma_v=3, fit_opts=fit_opts,
            invert=False, opt_method='lm', model=Model_Gaussian, rv_guess=1.5):
     """Find a radial velocity by way of fitting a Gaussian to the CCF.
@@ -178,8 +181,10 @@ def fit_rv(v_grid, ccf, e_ccf, vrange=12, sigma_v=3, fit_opts=fit_opts,
 # =============================================================================
 # CCF Pipeline (Spec File -> CCF File)
 
+weight_dict = pd.read_csv(os.path.join(solar_dir,'order_weights.csv')).set_index('echelle')
+
 def ccf(spec_file,use_iccf=False,
-        cont_norm=False,**kwargs):
+        cont_norm=False,weight=True,**kwargs):
     if os.path.basename(spec_file)==spec_file:
         spec_file = standardSpec_basename2FullPath(file)
     inst = os.path.basename(spec_file).split('_')[-1][:-5]
@@ -213,7 +218,8 @@ def ccf(spec_file,use_iccf=False,
             e_ccfs[iord] = e_ccf.copy()
         orders = 161-np.arange(num_ord)
     else:
-        v_grid, unordered_ccfs, unordered_e_ccfs, orders = eccf_orderwise(wvln,spec,errs,**kwargs)
+        v_grid, unordered_ccfs, unordered_e_ccfs, orders = eccf_orderwise(wvln,spec,errs,
+                                                                          vwidth=vwidth_dict[inst],**kwargs)
         # Pad Orders as needed
         # (the EXPRES pipeline automatically removes orders with no CCF lines)
         ccfs, e_ccfs = np.full((2,num_ord,len(v_grid)),np.nan)
@@ -223,23 +229,26 @@ def ccf(spec_file,use_iccf=False,
                 ccfs[iord] = unordered_ccfs[nord]
                 e_ccfs[iord] = unordered_e_ccfs[nord]
         orders = 161-np.arange(num_ord)
+    
+    if weight:
+        for iord,nord in enumerate(orders):
+            ccfs[iord] = ccfs[iord]/np.nanmax(ccfs[iord])*weight_dict.at[nord,inst]
+            e_ccfs[iord] = e_ccfs[iord]/np.nanmax(ccfs[iord])*weight_dict.at[nord,inst]
     return time, v_grid, ccfs, e_ccfs, orders
     
-def ccfFit(v_grid, ccfs, e_ccfs, orders, **kwargs):
+def ccfFit(v_grid, ccfs, e_ccfs, orders, sample_factor=1,**kwargs):
     num_ord = len(ccfs)
-    obo_rv, obo_rv_e = np.empty((2,num_ord))
+    obo_rv, obo_rv_e = np.full((2,num_ord),np.nan)
     for iord in range(num_ord):
-        if np.sum(np.isfinite(ccfs[iord]))==0:
-            obo_rv[iord], obo_rv_e[iord] = np.nan, np.nan
-        else:
-            obo_rv[iord], obo_rv_e[iord] = fit_rv(v_grid,ccfs[iord],e_ccfs[iord], **kwargs)
+        if np.sum(np.isfinite(ccfs[iord]))>0:
+            obo_rv[iord], obo_rv_e[iord] = fit_rv(v_grid[::sample_factor],
+                                                  ccfs[iord,::sample_factor],
+                                                  e_ccfs[iord,::sample_factor], **kwargs)
     
     # Joined CCF
-    ccf = np.nanmean(ccfs, axis=0)
+    ccf = np.nansum(ccfs, axis=0)
     e_ccf = np.sqrt(np.nansum(e_ccfs**2, axis=0)) / np.sum(np.isfinite(e_ccfs), axis=0)
-    obo_rv[iord], obo_rv_e[iord] = fit_rv(v_grid,ccf,e_ccf, **kwargs)
-    
-    ccf_rv, ccf_rv_e = fit_rv(v_grid,ccf,e_ccf, **kwargs)
+    ccf_rv, ccf_rv_e = fit_rv(v_grid[::sample_factor],ccf[::sample_factor],e_ccf[::sample_factor], **kwargs)
     ccf_rv, ccf_rv_e = ccf_rv*1000, ccf_rv_e*1000
     
     ccf_dict = {
@@ -249,8 +258,10 @@ def ccfFit(v_grid, ccfs, e_ccfs, orders, **kwargs):
         'echelle_orders' : orders.copy(),
         'obo_ccf'   : ccfs.copy(),
         'obo_e_ccf' : e_ccfs.copy(),
-        'obo_rv'    : obo_rv.copy(),
-        'obo_e_rv'  : obo_rv_e.copy(),
+        'obo_rv'    : obo_rv.copy()*1000,
+        'obo_e_rv'  : obo_rv_e.copy()*1000,
     }
     
+    # Separating out global RV/error to make it easier to
+    #     read into a FITs file later
     return ccf_rv, ccf_rv_e, ccf_dict

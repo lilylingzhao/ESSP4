@@ -303,16 +303,18 @@ def readL2(file_name,pad_orders=False):
     elif inst=='neid': # NEID
         hdus = fits.open(file_name)
         # The first 12 and last 4 orders of the NEID data are never any good
-        wave = hdus['SCIWAVE'].data[12:-4].copy()
+        # I'm going to remove an additional 13 orders from the red
+        #     they're so ravaged by tellurics or low SNR it's just not worth it
+        wave = hdus['SCIWAVE'].data[12:-17].copy()
         # Correct each order for the barycentric correction
         for iord in range(len(wave)):
             nord = iord+12
             real_nord = str(173-nord) if nord<=73 else '0'+str(173-nord)
             berv_ms = hdus[0].header[f'SSBRV{real_nord}']*1000 # m/s
             wave[iord] /= np.exp(np.arctanh(-berv_ms/c.value))
-        blaz = hdus['SCIBLAZE'].data[12:-4].copy()
-        spec = hdus['SCIFLUX'].data[12:-4].copy()
-        errs = np.sqrt(hdus['SCIVAR'].data[12:-4].copy())
+        blaz = hdus['SCIBLAZE'].data[12:-17].copy()
+        spec = hdus['SCIFLUX'].data[12:-17].copy()
+        errs = np.sqrt(hdus['SCIVAR'].data[12:-17].copy())
         hdus.close()
     else: # EXPRES Pipeline Format
         hdus = fits.open(file_name)
@@ -354,7 +356,7 @@ key_funcs = {
                   lambda geolat : dms2deg(geolat)),
 }
 
-def standardizeHeader(file_name,ds_df):
+def standardizeHeader(file_name,standard_name):
     """Read header and change to standardized version
 
     Parameters
@@ -382,7 +384,7 @@ def standardizeHeader(file_name,ds_df):
         if key_inst_idx == -1: # that means we entered a static value
             value = key_inst_key
         elif key_inst_key=='file_name':
-            value = file_name
+            value = standard_name
         elif inst.lower()=='neid' and key.lower()=='berv':
             # NEID BERV is a special case
             # Need to average over all the order-by-order values
@@ -428,7 +430,20 @@ def readCCF(file_name,standard=False):
     inst = 'expres' if standard else fileName2Inst(file_name)
       
     hdus = fits.open(file_name)
-    if inst == 'harps': # HARPS
+    if standard:
+        time_mjd = hdus[0].header['time']
+        ccf_x = hdus['v_grid'].data.copy()
+        ccf_y = hdus['ccf'].data.copy()
+        ccf_e = hdus['e_ccf'].data.copy()
+        ccf_rv = hdus[0].header['rv']
+        ccf_rv_e = hdus[0].header['e_rv']
+        # Order-By-Order
+        ccf_obo_y = hdus['obo_ccf'].data.copy()
+        ccf_obo_e = hdus['obo_e_ccf'].data.copy()
+        ccf_obo_rv = hdus['obo_rv'].data.copy()
+        ccf_obo_rv_e = hdus['obo_e_rv'].data.copy()
+        ccf_obo_o = hdus['echelle_orders'].data.copy()
+    elif inst == 'harps': # HARPS
         time_mjd = hdus[0].header['MJD-OBS']
         num_ord, num_vel = hdus[0].data.shape
         v0 = hdus[0].header['CRVAL1']
@@ -483,17 +498,19 @@ def readCCF(file_name,standard=False):
         # Order-By-Order
         ccf_obo_y = ccf_data.copy()
         ccf_obo_e = np.full_like(ccf_obo_y,np.nan)
-        ccf_obo_rv = np.full(num_ord,np.nan)
-        ccf_obo_rv_e = np.full(num_ord,np.nan)
         ccf_obo_o = 161-np.arange(num_ord)
-    else: # EXPRES Pipeline Format, i.e. format of standard CCFs
-        if standard:
-            # Surely we'll change this eventually
-            time_mjd = hdus[0].header['DATE-OBS']
-            if time_mjd < 2450000:
-                time_mjd = Time(time_mjd,format='jd').mjd
-        else:
-            time_mjd = hdus[0].header['MJD']
+        ccf_obo_rv = np.full(num_ord,np.nan)
+        key_list = list(hdus[12].header.keys())
+        for iord,nord in enumerate(ccf_obo_o):
+            nord = str(nord)
+            while len(nord)<3:
+                nord = '0'+nord
+            key = f'CCRV{nord}'
+            if key in key_list:
+                ccf_obo_rv[iord] = hdus[12].header[key]*1000
+        ccf_obo_rv_e = np.full(num_ord,np.nan)
+    else: # EXPRES Pipeline Format
+        time_mjd = hdus[0].header['MJD']
         ccf_x = hdus[1].data['V_grid'].copy()/100/1000
         ccf_y = hdus[1].data['ccf'].copy()
         ccf_e = hdus[1].data['e_ccf'].copy()

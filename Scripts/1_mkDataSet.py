@@ -3,7 +3,7 @@ import argparse
 from tqdm import tqdm
 
 import sys
-sys.path.append('../')
+sys.path.append('/mnt/home/lzhao/SolarComparison/ESSP4/')
 from utils import solar_dir, instruments, mon_min, offset_dict
 from data import *
 from solarContinuum import solarCont
@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description='Generate an ESSP IV Data Set')
     
     parser.add_argument('-d','--data-set',type=int,
-                        help='Nuber of the data set to use in saved files.')
+                        help='Number of the data set to use in saved files.')
     
     # Selecting observations
     parser.add_argument('-n','--num-obs',type=int,default=3,
@@ -38,8 +38,10 @@ def main():
     data_set_num = int(args.data_set)
     data_set_name = f'DS{data_set_num}'
     
-    # Generate random time offset for data set
+    # Set Random Seed for Data Set
     np.random.seed(data_set_num)
+    
+    # Generate random time offset for data set
     time0 = Time('2021-04-27').mjd+np.random.rand()
     
     ### Select Observations for Data Set
@@ -87,9 +89,8 @@ def main():
         for iord in range(len(wave)):
             common_mask[iord] = (wave[iord]>=minax_df.at[iord,'Min']) & (wave[iord]<=minax_df.at[iord,'Max'])
         
-        # Standardized 
-        #!!!!# WE'LL CHANGE THE HEADERS HERE EVENTUALLY
-        head = standardizeHeader(file_name,ds_df)
+        # Standardized Headers
+        head = standardizeHeader(file_name,os.path.basename(save_file))
         # Artificially Offset Time
         head['mjd_utc'] -= (mon_min-time0)
         head['jd_utc']  -= (mon_min-time0)
@@ -98,14 +99,14 @@ def main():
         data_dict = {
             'wavelength'  : wave.copy(),
             'flux'        : padOrders(spec,inst_name),
-            'uncertainty'    : padOrders(errs,inst_name),
+            'uncertainty' : padOrders(errs,inst_name),
             'continuum'   : padOrders(cont,inst_name),
             'blaze'       : padOrders(blaz,inst_name),
             'common_mask' : common_mask.copy().astype(int),
         }
         
         ### Inject Planet
-        tell_mask, data_dict = injectPlanet(inject_rv[ifile],data_dict)
+        tell_mask, data_dict = injectPlanet(inject_rv[ifile],data_dict.copy())
         
         ### Save FITS File
         hdu = fits.PrimaryHDU(data=None,header=head)

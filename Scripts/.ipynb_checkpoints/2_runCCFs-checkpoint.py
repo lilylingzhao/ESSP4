@@ -8,9 +8,9 @@ from astropy.time import Time
 from tqdm import tqdm
 
 import sys
-sys.path.append('../')
-from utils import solar_dir
-from ccf import ccf, ccfFit, g2_mask
+sys.path.append('/mnt/home/lzhao/SolarComparison/ESSP4/')
+from utils import solar_dir, standardFile_file2inst
+from ccf import ccf, ccfFit, default_mask_file
 
 def main():
     
@@ -27,19 +27,15 @@ def main():
                         help="Use iCCF code (over EXPRES pipeline code)")
     
     # CCF Parameters
-    parser.add_argument('--mask_file',type=str,default=g2_mask,
+    parser.add_argument('--mask_file',type=str,default=default_mask_file,
                         help='File name of CCF mask to use')
     parser.add_argument('--vrange',type=int,default=12,
                         help='+/- range of velocity grid in km/s')
-    parser.add_argument('--v0',type=float,default=3,
+    parser.add_argument('--v0',type=float,default=0,
                         help='Center of velocity grid in km/s')
     parser.add_argument('--vspacing',type=float,default=.4,
                         help='Velocity spacing in km/s')
-    # EXPRES CCF Specific
-    parser.add_argument('--vwidth',default=None,
-                        help='Automatic velocity width of the mask')
-    parser.add_argument('--npix',type=float,default=4,
-                        help='Number of pixels to use around the nominal CCF window')
+    
     # iCCF Specific
     parser.add_argument('--mask_width',type=float,default=0.5,
                         help='Mask width for iCCF')
@@ -66,25 +62,28 @@ def main():
     
     # Different parameters for EXPRES CCF and iCCF
     ccf_params = {
-        'mask_file':str(args.mask_file),
         'vrange':float(args.vrange),
         'v0':float(args.v0),
         'vspacing':float(args.vspacing),
     }
     if args.iccf:
         ccf_params = {'mask_width':float(args.mask_width)}
-    else:
-        ccf_params = {'vwidth':args.vwidth,'npix':int(args.npix)}
     
-    for file in tqdm(file_list):
+    for file in tqdm(file_list,desc='CCFs'):
+        inst = standardFile_file2inst(file)
         ccf_file = file.replace('Spectra','CCFs').replace('_spec_','_ccfs_')
         if os.path.isfile(ccf_file) and not args.overwrite:
             continue
-        time, v_grid, ccfs, e_ccfs, orders = ccf(file,use_iccf=args.iccf,**ccf_params)
+        time, v_grid, ccfs, e_ccfs, orders = ccf(file,use_iccf=args.iccf,
+                                                 mask_file=args.mask_file,**ccf_params)
+        
+        
+        sampling = 2 if inst in ['harps','harpsn'] else 1
         ccf_rv, ccf_rv_e, ccf_dict = ccfFit(v_grid,ccfs,e_ccfs,orders,
                                             vrange=float(args.fit_range),
                                             sigma_v=float(args.sigma_v),
-                                            rv_guess=float(args.rv_guess))
+                                            rv_guess=float(args.rv_guess),
+                                            sample_factor=sampling)
         if np.isnan(ccf_rv):
             ccf_rv, ccf_rv_e = 'NaN', 'NaN'
         else:
@@ -94,10 +93,14 @@ def main():
         ccf_head['time'] = (time, 'Time of observation [eMJD]')
         ccf_head['date-ccf'] = (Time.now().fits, 'Time of CCF calculation')
         ccf_head['pipeline'] = 'iCCF' if args.iccf else 'EXPRES'
-        ccf_head['rv'] = (ccf_rv, 'Best-fit CCF RV in m/s')
+        ccf_head['rv'] = (ccf_rv-offset_dict_essp[inst], 'Best-fit CCF RV in m/s')
         ccf_head['e_rv'] = (ccf_rv_e, 'CCF RV Error m/s')
+        ccf_head['mask'] = (os.path.basename(args.mask_file), 'CCF mask file used')
         for key in ccf_params:
-            ccf_head[key] = (ccf_params[key], ccf_head_comments[key])
+            if key=='obo_rv':
+                ccf_head[key] = (ccf_params[key]-offset_dict_essp[inst], ccf_head_comments[key])
+            else:
+                ccf_head[key] = (ccf_params[key], ccf_head_comments[key])
         ccf_head['sigma_v'] = (float(args.sigma_v), 'Initial guess of sigma in km/s')
         ccf_head['rv_guess'] = (float(args.rv_guess), 'Initial guess of mean in km/s')
         
@@ -110,7 +113,6 @@ def main():
         tqdm.write(ccf_file)
 
 ccf_head_comments = {
-    'mask_file': 'CCF mask file used',
     'vrange': '+/- range of velcity in km/s',
     'v0': 'Center of velocity grid in km/s',
     'vspacing': 'Velocity spacing in km/s',

@@ -9,8 +9,8 @@ import pandas as pd
 from tqdm import tqdm
 
 import sys
-sys.path.append('../')
-from utils import solar_dir, standardSpec_basename2FullPath, standardSpec_spec2ccf
+sys.path.append('/mnt/home/lzhao/SolarComparison/ESSP4/')
+from utils import *
 from indicators import *
 
 def main():
@@ -46,6 +46,7 @@ def main():
         
         # Loop through list of standard spectrum files
         for ifile, file in enumerate(tqdm(ds_df.index,desc=f'{dset_name} Indicators')):
+            inst = standardFile_file2inst(file)
             
             # Get spectra related indicators
             spec_file = standardSpec_basename2FullPath(file)
@@ -56,12 +57,18 @@ def main():
             hdus.close()
             # H-alpha Emission
             try:
-                ds_df.at[file,'H-alpha Emission'] = lineEmission(wvln, spec, errs=errs)
+                # Only in NEID does H-alpha appear in more than one order
+                # The bluer of these orders consistently has >SNR
+                # We therefore return the first H-alpha measure for all instruments
+                halpha = lineEmission(wvln, spec, errs=errs)[0]
+                if inst=='harpsn': # correct for the occasional continuum issue
+                    halpha /= np.nanmedian(spec[68][(wvln[68]<6544)&(wvln[68]>6540)])
+                ds_df.at[file,'H-alpha Emission'] = halpha
             except:
                 tqdm.write(f'Failed to get H-alpha for: {file}')
             # S Index
             try:
-                ds_df.at[file,'S Index'] = caHK(wvln, spec, errs)
+                ds_df.at[file,'CaII Emission'] = caHK(wvln, spec, errs)
             except:
                 tqdm.write(f'Failed to get S Index for: {file}')
             
@@ -71,7 +78,15 @@ def main():
             ccf_x = hdus['v_grid'].data.copy()
             ccf_y = hdus['ccf'].data.copy()
             ccf_e = hdus['e_ccf'].data.copy()
+            # Read in CCF velocity/error
+            ds_df.at[file,'RV [m/s]'] = hdus[0].header['rv']
+            ds_df.at[file,'RV Err. [m/s]'] = hdus[0].header['e_rv']
             hdus.close()
+            # Resample CCF as necessary
+            if inst in ['harps','harpsn']:
+                ccf_x = ccf_x[::2]
+                ccf_y = ccf_y[::2]
+                ccf_e = ccf_e[::2]
             # FWHM and Contrast
             try:
                 (fwhm, e_fwhm), (contrast, e_contrast) = ccfFwhmContrast(ccf_x,ccf_y,ccf_e)
@@ -79,8 +94,8 @@ def main():
                     e_fwhm = np.nan
                 if not np.isfinite(e_contrast):
                     e_contrast = np.nan
-                ds_df.at[file,'CCF FWHM [m/s]'], ds_df.at[file,'CCF FWHM Err. [m/s]'] = fwhm, e_fwhm
-                ds_df.at[file,'CCF Contrast [m/s]'], ds_df.at[file,'CCF Contrast Err. [m/s]'] = contrast, e_contrast
+                ds_df.at[file,'CCF FWHM [km/s]'], ds_df.at[file,'CCF FWHM Err. [km/s]'] = fwhm, e_fwhm
+                ds_df.at[file,'CCF Contrast'], ds_df.at[file,'CCF Contrast Err.'] = contrast, e_contrast
             except:
                 tqdm.write(f'Failed to fit CCF to Gaussian for: {file}')
             # BIS
@@ -103,7 +118,7 @@ cols_final = ['Time [eMJD]','RV [m/s]', 'RV Err. [m/s]',
               'Exp. Time [s]', 'Airmass', 'BERV [km/s]', 'Instrument',
               'CCF FWHM [km/s]','CCF FWHM Err. [km/s]',
               'CCF Contrast','CCF Contrast Err.',
-              'BIS [km/s]','H-alpha Emission','S Index']
+              'BIS [m/s]','H-alpha Emission','CaII Emission']
 
 if __name__ == '__main__':
     import sys

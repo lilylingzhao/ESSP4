@@ -17,9 +17,6 @@ solar_dir = os.path.join(ceph_dir,'SolarData')
 mask_dir = os.path.join(ceph_dir,'ESPRESSO_MaskFiles')
 essp4_dir = '/mnt/home/lzhao/SolarComparison/ESSP4/'
 
-default_tell_file = os.path.join(solar_dir,'telluricMask.csv')
-default_mask_file = os.path.join(mask_dir,'ESPRESSO_G2.fits')
-
 # =============================================================================
 # Useful Variables
 
@@ -53,6 +50,13 @@ offset_dict = {
     'neid': -1.108487803337379,
     'harps': -0.26701724421038897,
     'harpsn': 100.22080891122873
+}
+
+offset_dict_essp = {
+    'expres': 0,
+    'neid': 0,
+    'harps': 0,
+    'harpsn': 0
 }
 
 # =============================================================================
@@ -108,6 +112,9 @@ def standardSpec_basename2FullPath(file_name):
 def standardSpec_spec2ccf(spec_file):
     return spec_file.replace('Spectra','CCFs').replace('_spec_','_ccfs_')
 
+def standardFile_file2inst(file):
+    return file.split('_')[-1].split('.')[0]
+
 # =============================================================================
 # Standardizing Relative/Echelle Order
 
@@ -129,3 +136,7 @@ def padOrders(og_arr,inst):
     else:
         assert False, print(f'Instrument name "{inst}" not recognized')
     return pad_arr
+
+def unpadOrders(og_arr):
+    isord = np.sum(np.isfinite(og_arr),axis=1)>0
+    return og_arr[isord]

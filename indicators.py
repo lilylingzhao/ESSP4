@@ -6,6 +6,8 @@ from astropy.constants import c
 from scipy.optimize import curve_fit
 from scipy import interpolate
 
+from utils import unpadOrders
+
 # =============================================================================
 # Gaussian Fitting Functions
 
@@ -18,14 +20,22 @@ def findGaussp0(x,y,invert=False):
     Generate initial guesses for a Gaussian fit to a given CCF
     """
     A = y.max()-y.min() * (-1 if invert else 1)
-    mu = x[np.argmin(y)] # Find position of lowest CCF
     sig = 10.*np.nanmedian(np.diff(x)) # A rough estimate scaled by the spread
+    mu = x[np.argmin(y)]+np.pi/1000 # Find position of lowest CCF w/ perturbation
     m = float((y[-1]-y[0])/len(y)) # Average slope between edge points
     b = np.nanmedian(y) # Average offset
     
     return [A, mu, sig, m, b]
 
-def gaussFit(x,y,yerr=None,invert=False,**kwargs):
+def gaussFit(x,y,yerr=None,invert=True,**kwargs):
+    finite_mask = np.isfinite(x) & np.isfinite(y)
+    if yerr is not None:
+        finite_mask &= np.isfinite(yerr)
+    
+    x, y = x[finite_mask], y[finite_mask]
+    if yerr is not None:
+        yerr = yerr[finite_mask]
+    
     p0 = findGaussp0(x,y,invert=invert)
     try:
         popt, pcov = curve_fit(gaussFunc, x, y, p0=p0, sigma=yerr, method='lm',
@@ -49,7 +59,7 @@ def ccfFwhmContrast(x,y,yerr):
 
     # Calculate Wanted Values
     fwhm, e_fwhm = 2*np.sqrt(2*np.log(2))*popt[2], 2*np.sqrt(2*np.log(2))*np.sqrt(pcov[2,2])
-    contrast, e_contrast = popt[0], pcov[0,0]
+    contrast, e_contrast = popt[0], np.sqrt(pcov[0,0])
     
     return (fwhm, e_fwhm), (contrast, e_contrast)
 
@@ -143,7 +153,12 @@ def findBIS(ccf_x,ccf_y,ccf_e,vt=(.6,.9),vb=(.1,.4),**kwargs):
 # =============================================================================
 # Line Emission
 
-def lineEmission(wvln, spec, core=6564.6, fit_width=1, intp_width=0.5, errs=None, **kwargs):
+def lineEmission(wvln, spec, core=6564.6, fit_width=.5, intp_width=0.5, errs=None, **kwargs):
+    # Remove All Nan Orders
+    wvln, spec = unpadOrders(wvln), unpadOrders(spec)
+    if errs is not None:
+        errs = unpadOrders(errs)
+    
     # Find Relevant Order
     num_ord, num_pix = wvln.shape
     ord_min = np.nanmin(wvln,axis=1)
@@ -153,10 +168,10 @@ def lineEmission(wvln, spec, core=6564.6, fit_width=1, intp_width=0.5, errs=None
     emis = np.zeros_like(ord_list,dtype=float)
     x_intp = np.linspace(core-intp_width/2,core+intp_width/2)
     for inord,nord in enumerate(ord_list):
-        nord_mask = np.abs(wvln[nord]-core)<(fit_width/2)
+        nord_mask = (np.abs(wvln[nord]-core)<(fit_width/2)) & np.isfinite(spec[nord])
         if errs is not None:
             weights = 1/errs[nord][nord_mask]
-            cont_errs = errs[nord]
+            cont_errs = errs[nord] # Where is this used?
         else:
             weights = None
             cont_errs = np.sqrt(spec[nord])
@@ -164,7 +179,7 @@ def lineEmission(wvln, spec, core=6564.6, fit_width=1, intp_width=0.5, errs=None
                                          w=weights,k=3,**kwargs)
         emis[inord] = np.min(f(x_intp))
 
-    return np.nanmedian(emis)
+    return emis
         
 
 # =============================================================================
@@ -207,17 +222,19 @@ def caHK(wvln, spec, errs):
             cmask = (wvln[nord]>cmin) & (wvln[nord]<cmax)
             min_ind, max_ind = np.array(np.sum(cmask)*np.array(cont_perct),dtype=int)
             cval_ord[iord] = np.nanmedian(np.sort((spec[nord])[cmask])[min_ind:max_ind])
-        cont_values[icont] = np.nanmedian(cval_ord)# * (1.16 if icont==1 else 1) # I really forget where this factor comes from
+        cont_values[icont] = np.nanmedian(cval_ord) * (1.16 if icont==1 else 1) # I really forget where this factor comes from
 
     # Get Emission
     core_values = np.empty(2,dtype=float)
     for icore,core in enumerate([ca_h,ca_k]):
         ord_list = np.arange(num_ord)[(ord_min<(core-5)) & (ord_max>(core+5))]
-        x = np.linspace(core-1.09,core+1.09,3)
         
         eval_ord = np.empty(len(ord_list),dtype=float)
+        snr_ord = np.empty(len(ord_list),dtype=float)
         for iord,nord in enumerate(ord_list):
-            eval_ord[iord] = np.average(spec[nord],weights=triangle(wvln[nord],core))
-        core_values[icore] = np.nanmedian(eval_ord)
+            m = np.isfinite(wvln[nord]) & np.isfinite(spec[nord])
+            eval_ord[iord] = np.average(spec[nord][m],weights=triangle(wvln[nord][m],core))
+            snr_ord[iord] = np.median((spec/errs)[nord][m])
+        core_values[icore] = eval_ord[np.argmax(snr_ord)] # use value from highest SNR Order
     
     return np.sum(core_values)/np.sum(cont_values)

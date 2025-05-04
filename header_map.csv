@@ -1,18 +1,18 @@
-keyword,harps_idx,harps_key,harpsn_idx,harpsn_key,expres_idx,expres_key,neid_idx,neid_key,Comment,
-instrume,-1,HARPS,-1,HARPS-N,-1,EXPRES,-1,NEID,Instrument name,Need to find headers
-program,-1,ESSP4,-1,ESSP4,-1,ESSP4,-1,ESSP4,ESSP round,Need to write a function
-data-set,0,file_name,0,file_name,0,file_name,0,file_name,Name of ESSP4 data set,
-filename,0,file_name,0,file_name,0,file_name,0,file_name,Name of the FITS file,
-date,0,file_name,0,file_name,0,file_name,0,file_name,Last modification date/time of this standardized file,
-mjd_utc,0,HIERARCH ESO QC BJD,0,HIERARCH TNG QC BJD,1,barymjd,12,ccfjdsum,Photon-weighted modified Julian date,
-jd_utc,0,HIERARCH ESO QC BJD,0,HIERARCH TNG QC BJD,1,barymjd,12,ccfjdsum,Photon-weighted Julian date,
-exptime,0,exptime,0,exptime,0,aexptime,0,exptime,Exposure time [s],
-observat,0,origin,0,observat,-1,Lowell,0,observat,Observatory name,
-telescop,0,telescop,0,telescop,0,telescp,0,telescop,Telescope name,
-obslon,-1,-70.73166667,0,geolon,0,sitelong,0,obslon,Observatory longitude [deg],
-obslat,-1,-29.26083333,0,geolat,0,sitelat,0,obslat,Observatory latitude [deg],
-obsalt,-1,2400,0,geoelev,0,siteelev,0,obsalt,Observatory altitude [m],
-airmass,0,HIERARCH ESO TEL AIRM START,0,airmass,0,ambeg,0,airmass,Airmass (most likely) at center field at beginning of exposure,
-berv,0,HIERARCH ESO QC BERV,0,HIERARCH TNG QC BERV,2,HIERARCH wtd_single_channel_bc,0,SSBRV{nord},Barycentric velocity in km/s,
-eclord0,-1,161,-1,161,-1,161,-1,161,Initial Echelle order for standardized files,
-origdate,0,date,0,date,1,date-ext,0,l2create,When the original file was created,
+keyword,harps_idx,harps_key,harpsn_idx,harpsn_key,expres_idx,expres_key,neid_idx,neid_key,Comment
+instrume,-1,HARPS,-1,HARPS-N,-1,EXPRES,-1,NEID,Instrument name
+program,-1,ESSP4,-1,ESSP4,-1,ESSP4,-1,ESSP4,ESSP round
+data-set,0,file_name,0,file_name,0,file_name,0,file_name,Name of ESSP4 data set
+filename,0,file_name,0,file_name,0,file_name,0,file_name,Name of the FITS file
+date,0,file_name,0,file_name,0,file_name,0,file_name,Time of last file modification
+mjd_utc,0,HIERARCH ESO QC BJD,0,HIERARCH TNG QC BJD,1,barymjd,12,ccfjdsum,Photon-weighted modified Julian date
+jd_utc,0,HIERARCH ESO QC BJD,0,HIERARCH TNG QC BJD,1,barymjd,12,ccfjdsum,Photon-weighted Julian date
+exptime,0,exptime,0,exptime,0,aexptime,0,exptime,Exposure time [s]
+observat,0,origin,0,observat,-1,Lowell,0,observat,Observatory name
+telescop,0,telescop,0,telescop,0,telescp,0,telescop,Telescope name
+obslon,-1,-70.73166667,0,geolon,0,sitelong,0,obslon,Observatory longitude [deg]
+obslat,-1,-29.26083333,0,geolat,0,sitelat,0,obslat,Observatory latitude [deg]
+obsalt,-1,2400,0,geoelev,0,siteelev,0,obsalt,Observatory altitude [m]
+airmass,0,HIERARCH ESO TEL AIRM START,0,airmass,0,ambeg,0,airmass,Airmass (most likely) at beginning of exposure
+berv,0,HIERARCH ESO QC BERV,0,HIERARCH TNG QC BERV,2,HIERARCH wtd_single_channel_bc,0,SSBRV{nord},Barycentric velocity in km/s
+eclord0,-1,161,-1,161,-1,161,-1,161,Initial Echelle order for standardized files
+origdate,0,date,0,date,1,date-ext,0,l2create,When the original DRP file was created

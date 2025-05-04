@@ -16,11 +16,14 @@ import rebound
 
 from kepler import getRV, getRV_K, getMfromK
 
-from utils import solar_dir, default_tell_file
+from utils import solar_dir
 
 wave_diff_log = 1.47149502e-06 # Determined in 250331_telluricWavelength.ipynb
 wave_min, wave_max = 3787, 11053
 y_shift = 0.002
+
+default_tell_file = os.path.join(solar_dir,'telluricMask.fits')
+default_tapas_file = '/mnt/home/lzhao/ceph/TelluricModels/kpno_telluric_16.0_51.0.fits'
 
 # =============================================================================
 # Mask Out Tellurics
@@ -73,8 +76,9 @@ def getSeleniteModel(file_list):
     
     return wave, tell, blaz
 
-def makeTelluricMask(wave,tell,blaz,tell_wave=None,wave_diff_log = 1.47149502e-06*.75,
-                     tell_cut=0.99,smoothing_window=9):
+def makeSeleniteTelluricMask(wave,tell,blaz,
+    tell_wave=None,wave_diff_log=1.47149502e-06*.75,
+    tell_cut=0.99,smoothing_window=9):
     """Generate a telluric mask
 
     Parameters
@@ -133,6 +137,28 @@ def makeTelluricMask(wave,tell,blaz,tell_wave=None,wave_diff_log = 1.47149502e-0
 
     # Get Telluric Mask
     return tell_wave, np.nanmax(tell_mask_arr,axis=0).astype(bool)
+
+
+def getTapasModel(wave,transmission,
+    tell_wave=None,wave_diff_log=1.47149502e-06*.75,
+    tell_cut=0.7,derv_cut=1000,smoothing_window=9):
+    
+    # Get Telluric Derivative
+    diff_t = np.diff(transmission)
+    delta_T = np.nanmedian([[np.nan,*diff_t],[*diff_t,np.nan]],axis=0)
+    diff_l = np.diff(wave)
+    delta_l = np.nanmedian([[np.nan,*diff_l],[*diff_l,np.nan]],axis=0)/wave
+    tell_derv = delta_T/delta_l
+    
+    mask = (np.abs(tell_derv)>derv_cut) | (transmission<tell_cut)
+    mask = np.ceil(medfilt(mask.astype(int),smoothing_window)).astype(bool)
+    
+    if tell_wave is None:
+        x_shift = y_shift/wave_diff_log
+        tell_wave = np.exp(np.arange(np.log(wave_min-x_shift),np.log(wave_max-x_shift),wave_diff_log))+x_shift
+    
+    tell_mask = np.round(np.interp(tell_wave,wave,mask,left=0,right=0)).astype(bool)
+    return tell_wave, tell_mask
 
 # =============================================================================
 # Injecting Doppler Shifts into Wavelengths
@@ -206,7 +232,7 @@ def getRvTimeSeries(times,param_file,host_mass=1):
                           **{param:pln_dict[param] for param in ['Mpl','p','e','w','t0','i']})
     
     return rv_v
-    
+
 def getTellMask(wave,tell_file=default_tell_file):
     """Derive a telluric mask with same shape as wave
 
@@ -224,7 +250,13 @@ def getTellMask(wave,tell_file=default_tell_file):
         Mask with same dimensions as wave
         True for wavelengths where there are tellurics
     """
-    tell_wave, tell_vals = np.loadtxt(tell_file,delimiter=',',unpack=True)
+    # Read in telluric mask
+    hdus = fits.open(tell_file)
+    tell_wave = hdus['wavelength'].data.copy()
+    tell_vals = hdus['telluric_mask'].data.copy().astype(bool)
+    hdus.close()
+    
+    # Interpolate onto wavelength in question
     tell_mask = np.ceil(np.interp(wave,tell_wave,tell_vals)).astype(bool)
     return tell_mask
 
@@ -250,16 +282,17 @@ def injectPlanet(rv,data_dict,tell_file=default_tell_file):
         Same data_dict as input, but with NaNs where there are tellurics
         for the wavelengths, flux, and uncertainty
     """
-    wave = data_dict['wavelength']/np.exp(np.arctanh(rv/c.to(u.m/u.s).value))
+    shifted_dict = data_dict.copy()
+    wave = data_dict['wavelength'].copy()/np.exp(np.arctanh(rv/c.to(u.m/u.s).value))
     tell_mask = getTellMask(wave,tell_file=tell_file)
     
-    data_dict['wavelength'] = wave.copy()
+    shifted_dict['wavelength'] = wave.copy()
     for key in ['flux','uncertainty']:
-        data_dict[key][tell_mask] = np.nan
+        shifted_dict[key][tell_mask] = np.nan
     
-    data_dict['telluric_mask'] = tell_mask.astype(int)
+    shifted_dict['telluric_mask'] = tell_mask.astype(int)
     
-    return tell_mask, data_dict
+    return tell_mask, shifted_dict
 
 
 # =============================================================================
