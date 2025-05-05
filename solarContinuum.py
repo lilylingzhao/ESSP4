@@ -146,7 +146,7 @@ def solarCont(file_name):
         cont[ord_split:] = cont_norm(wvln[ord_split:],spec[ord_split:],
                                      (errs/blaz)[ord_split:],knot_res=30)
     elif inst=='harps':
-        for iord in range(ord_split,num_ord):
+        for iord in range(num_ord):
             cont[iord] = cont_norm(wvln[iord],spec[iord],errs[iord],
                                    method='poly',deg=1 if iord<45 else 2)
     elif inst in ['harpsn','harps-n']:
