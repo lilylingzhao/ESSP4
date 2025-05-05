@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 import sys
 sys.path.append('/mnt/home/lzhao/SolarComparison/ESSP4/')
-from utils import solar_dir, standardFile_file2inst
+from utils import solar_dir, standardFile_file2inst, offset_dict_essp
 from ccf import ccf, ccfFit, default_mask_file
 
 def main():

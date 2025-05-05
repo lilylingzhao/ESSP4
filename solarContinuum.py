@@ -145,13 +145,14 @@ def solarCont(file_name):
                                      (errs/blaz)[:ord_split],knot_res=50)
         cont[ord_split:] = cont_norm(wvln[ord_split:],spec[ord_split:],
                                      (errs/blaz)[ord_split:],knot_res=30)
-    elif inst in ['harps','harpsn','harps-n']:
-        ord_split = 45 if inst=='harps' else 27
-        poly_deg = 2 if inst=='harps' else 1
-        cont[:ord_split] = contAligned(wvln[:ord_split],spec[:ord_split],
-                                       errs[:ord_split],method='poly',deg=poly_deg)
+    elif inst=='harps':
         for iord in range(ord_split,num_ord):
-            cont[iord] = cont_norm(wvln[iord],spec[iord],errs[iord],method='poly',deg=poly_deg)
+            cont[iord] = cont_norm(wvln[iord],spec[iord],errs[iord],
+                                   method='poly',deg=1 if iord<45 else 2)
+    elif inst in ['harpsn','harps-n']:
+        # Fit all orders to a simple linear fit (thank you blaze model!
+        for iord in range(num_ord):
+            cont[iord] = cont_norm(wvln[iord],spec[iord],errs[iord],method='poly',deg=1)
     elif inst == 'expres':
         hdus = fits.open(file_name)
         cont = hdus[1].data['continuum'].copy()
