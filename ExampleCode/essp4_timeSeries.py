@@ -5,7 +5,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Specify file name
-example_file = 
+# Specify where all the data set folders (i.e. DS1) are, here saved into "essp_dir" variable
+essp_dir = 
+# Specify data set number
+dset_num = 1
+example_file = os.path.join(essp_dir,f'DS{dset_num}',f'DS{dset_num}_timeSeries.csv')
 
 # =============================================================================
 #  Read in with `pandas`

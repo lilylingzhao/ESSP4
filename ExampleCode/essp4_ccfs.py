@@ -7,13 +7,15 @@ from astropy.io import fits
 import seaborn as sns
 
 # Specify file name
-# Specify where all the spectra are saved
-ccfs_dir = 
-# For example, to return all files in a data set:
-file_list = glob(os.path.join(ccfs_dir,'*.fits'))
+# Specify where all the data set folders (i.e. DS1) are, here saved into "essp_dir" variable
+essp_dir = 
+# Specify data set number
+dset_num = 1
+# Select a file at random from all files in the data set
+file_list = glob(os.path.join(essp_dir,f'DS{dset_num}','CCFs',f'DS{dset_num}*.fits'))
 
 # Select a file at random from all files in the data set as example
-file = np.random.choice(file_list)
+file_name = np.random.choice(file_list)
 
 # =============================================================================
 # Open a FITS File

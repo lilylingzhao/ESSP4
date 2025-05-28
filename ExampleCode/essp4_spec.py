@@ -6,8 +6,12 @@ import matplotlib.pyplot as plt
 from astropy.io import fits
 
 # Specify file name
-# Specify where all the spectra are saved
-spec_dir = 
+# Specify where all the data set folders (i.e. DS1) are, here saved into "essp_dir" variable
+essp_dir = 
+# Specify data set number
+dset_num = 1
+# Select a file at random from all files in the data set
+file_list = glob(os.path.join(essp_dir,f'DS{dset_num}','Spectra',f'DS{dset_num}*.fits'))
 # For example, to return all files in a data set:
 file_list = glob(os.path.join(spec_dir,'*.fits'))
 
