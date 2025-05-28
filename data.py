@@ -275,7 +275,8 @@ def readL2(file_name,pad_orders=False):
         
     """
     inst = fileName2Inst(file_name)
-    if not os.path.isfile(file_name):
+    if os.path.basename(file_name)==file_name:
+        # Change from file name to full file pathe
         inst_dir = instrument_nickname2Fullname(inst)
         if inst in ['harps','harpsn'] and 'BLAZE' in file_name:
             inst_dir += '_wBlaze'

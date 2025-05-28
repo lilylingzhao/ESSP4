@@ -186,7 +186,7 @@ weight_dict = pd.read_csv(os.path.join(solar_dir,'order_weights.csv')).set_index
 def ccf(spec_file,use_iccf=False,
         cont_norm=False,weight=True,**kwargs):
     if os.path.basename(spec_file)==spec_file:
-        spec_file = standardSpec_basename2FullPath(file)
+        spec_file = standardSpec_basename2FullPath(spec_file)
     inst = os.path.basename(spec_file).split('_')[-1][:-5]
     
     # Read Spectral Data In
@@ -200,8 +200,6 @@ def ccf(spec_file,use_iccf=False,
     if use_iccf:
         blaz = hdus['blaze'].data.copy()
         berv = hdus[0].header['berv']
-    if inst=='neid':
-        errs /= hdus['blaze'].data.copy()
     hdus.close()
     num_ord, num_pix = wvln.shape
     
