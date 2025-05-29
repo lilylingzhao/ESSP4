@@ -314,7 +314,7 @@ def readL2(file_name,pad_orders=False):
             berv_ms = hdus[0].header[f'SSBRV{real_nord}']*1000 # m/s
             wave[iord] /= np.exp(np.arctanh(-berv_ms/c.value))
         blaz = hdus['SCIBLAZE'].data[12:-17].copy()
-        spec = hdus['SCIFLUX'].data[12:-17].copy()
+        spec = hdus['SCIFLUX'].data[12:-17].copy()/blaz
         errs = np.sqrt(hdus['SCIVAR'].data[12:-17].copy())
         hdus.close()
     else: # EXPRES Pipeline Format
@@ -322,7 +322,7 @@ def readL2(file_name,pad_orders=False):
         wave = hdus[1].data['bary_wavelength'].copy()
         cont = hdus[1].data['continuum'].copy()
         blaz = hdus[1].data['blaze'].copy()
-        spec = hdus[1].data['spectrum'].copy()*blaz
+        spec = hdus[1].data['spectrum'].copy()
         errs = hdus[1].data['uncertainty'].copy()*blaz
         wave[np.isnan(spec)] = np.nan
         #tell = hdus[1].data['tellurics'].copy()
