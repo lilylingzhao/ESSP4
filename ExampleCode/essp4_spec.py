@@ -97,7 +97,7 @@ for iinst,inst in enumerate(['harpsn','harps','expres','neid']):
     hdus.close()
     
     # Color points by uncertainty
-    cbar = ax.scatter(wave[nord],(spec[nord]*blaz[nord]),c=unct[nord])
+    cbar = ax.scatter(wave[nord],spec[nord],c=unct[nord])
     fig.colorbar(cbar,ax=ax,label='Uncertainty')
 fig.tight_layout()
 
