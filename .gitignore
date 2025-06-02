@@ -1,3 +1,6 @@
 /.ipynb_checkpoints
 /ESSP4/UnitTests/.ipynb_checkpoints
 /ExampleCode/.ipynb_checkpoints
+/__pycache__
+/Scripts/.ipynb_checkpoints
+UnitTests/.DS_Store
