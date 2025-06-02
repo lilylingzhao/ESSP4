@@ -7,15 +7,11 @@ from astropy.time import Time
 import pandas as pd
 import seaborn as sns
 
-ceph_dir = '/Users/lilyzhao/Documents/ceph/'
-solar_dir = os.path.join(ceph_dir,'Solar')
+ceph_dir = '/Volumes/Hasbrouck/ceph/'
+solar_dir = os.path.join(ceph_dir,'ESSP_Solar',)
 mask_dir = os.path.join(ceph_dir,'CCF_Masks','ESPRESSO')
+essp_dir = os.path.join(solar_dir,'4_DataSets','Training')
 essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
-
-ceph_dir = '/mnt/home/lzhao/ceph/'
-solar_dir = os.path.join(ceph_dir,'SolarData')
-mask_dir = os.path.join(ceph_dir,'ESPRESSO_MaskFiles')
-essp4_dir = '/mnt/home/lzhao/SolarComparison/ESSP4/'
 
 # =============================================================================
 # Useful Variables
@@ -104,7 +100,7 @@ def getHarpsNoBlazeFile(file_name):
 def spec_basename2FullPath(file_name):
     inst = fileName2Inst(file_name)
     inst_fullName = instrument_nickname2Fullname(inst)
-    return os.path.join(solar_dir,inst_fullName + ('_wBlaze' if 'BLAZE' in file_name else ''),
+    return os.path.join(solar_dir,'Spectra',inst_fullName + ('_wBlaze' if 'BLAZE' in file_name else ''),
                         file_name)
 
 def standardSpec_basename2FullPath(file_name):

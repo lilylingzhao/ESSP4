@@ -280,7 +280,7 @@ def readL2(file_name,pad_orders=False):
         inst_dir = instrument_nickname2Fullname(inst)
         if inst in ['harps','harpsn'] and 'BLAZE' in file_name:
             inst_dir += '_wBlaze'
-        file_name = os.path.join(solar_dir,inst_dir,file_name)
+        file_name = spec_basename2FullPath(file_name)
     
     if inst in ['harps','harpsn','harpn','harps-n']: # HARPS or HARPS-North
         

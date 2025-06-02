@@ -84,7 +84,7 @@ def main():
     tell_head = fits.Header()
     tell_head['maskdate'] = (Time.now().fits, 'Time mask was generated')
     tell_head['sln-tcut'] = (args.telluric_cut, 'SELENITE telluric cut')
-    tell_head['sln-fcut'] = (args.telluric_cut, 'SELENITE cut on number of files')
+    tell_head['sln-fcut'] = (args.file_cut, 'SELENITE cut on number of files')
     tell_head['tps-tcut'] = (0.7, 'TAPAS telluric cut')
     tell_head['tps-dcut'] = (1000, 'TAPAS telluric derivative cut')
     tell_head['smoothin'] = (args.smoothing_window, 'Smoothing window')
