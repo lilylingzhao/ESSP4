@@ -79,7 +79,7 @@ def main():
             ccf_y = hdus['ccf'].data.copy()
             ccf_e = hdus['e_ccf'].data.copy()
             # Read in CCF velocity/error
-            ds_df.at[file,'RV [m/s]'] = hdus[0].header['rv']
+            ds_df.at[file,'RV [m/s]'] = hdus[0].header['rv']-offset_dict_essp[inst]
             ds_df.at[file,'RV Err. [m/s]'] = hdus[0].header['e_rv']
             hdus.close()
             # Resample CCF as necessary

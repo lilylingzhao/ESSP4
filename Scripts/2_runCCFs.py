@@ -93,12 +93,12 @@ def main():
         ccf_head['time'] = (time, 'Time of observation [eMJD]')
         ccf_head['date-ccf'] = (Time.now().fits, 'Time of CCF calculation')
         ccf_head['pipeline'] = 'iCCF' if args.iccf else 'EXPRES'
-        ccf_head['rv'] = (ccf_rv-offset_dict_essp[inst], 'Best-fit CCF RV in m/s')
+        ccf_head['rv'] = (ccf_rv, 'Best-fit CCF RV in m/s')
         ccf_head['e_rv'] = (ccf_rv_e, 'CCF RV Error m/s')
         ccf_head['mask'] = (os.path.basename(args.mask_file), 'CCF mask file used')
         for key in ccf_params:
             if key=='obo_rv':
-                ccf_head[key] = (ccf_params[key]-offset_dict_essp[inst], ccf_head_comments[key])
+                ccf_head[key] = (ccf_params[key], ccf_head_comments[key])
             else:
                 ccf_head[key] = (ccf_params[key], ccf_head_comments[key])
         ccf_head['sigma_v'] = (float(args.sigma_v), 'Initial guess of sigma in km/s')
