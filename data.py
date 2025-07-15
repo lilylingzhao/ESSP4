@@ -357,7 +357,7 @@ key_funcs = {
                   lambda geolat : dms2deg(geolat)),
 }
 
-def standardizeHeader(file_name,standard_name):
+def standardizeHeader(file_name,standard_name=None):
     """Read header and change to standardized version
 
     Parameters
@@ -385,14 +385,20 @@ def standardizeHeader(file_name,standard_name):
         if key_inst_idx == -1: # that means we entered a static value
             value = key_inst_key
         elif key_inst_key=='file_name':
-            value = standard_name
+            if standard_name is not None:
+                value = standard_name
+            else:
+                standard_name = os.path.basename(file_name)
         elif inst.lower()=='neid' and key.lower()=='berv':
             # NEID BERV is a special case
             # Need to average over all the order-by-order values
             ord_list = range(52,174)
             value = np.nanmedian([hdus[0].header[f'SSBRV0{nord}' if nord<100 else f'SSBRV{nord}'] for nord in ord_list])
         else:
-            value = hdus[key_inst_idx].header[key_inst_key]
+            try:
+                value = hdus[key_inst_idx].header[key_inst_key]
+            except:
+                value = ''
         
         # If value needs to be adjusted somehow
         if key in key_funcs.keys():
