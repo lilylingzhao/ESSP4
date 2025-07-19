@@ -16,14 +16,14 @@ import rebound
 
 from kepler import getRV, getRV_K, getMfromK
 
-from utils import solar_dir
+from utils import solar_dir, ceph_dir
 
 wave_diff_log = 1.47149502e-06 # Determined in 250331_telluricWavelength.ipynb
 wave_min, wave_max = 3787, 11053
 y_shift = 0.002
 
 default_tell_file = os.path.join(solar_dir,'telluricMask.fits')
-default_tapas_file = '/mnt/home/lzhao/ceph/TelluricModels/kpno_telluric_16.0_51.0.fits'
+default_tapas_file = os.path.join(ceph_dir,'250425_telluric','kpno_telluric_16.0_51.0.fits')
 
 # =============================================================================
 # Mask Out Tellurics
