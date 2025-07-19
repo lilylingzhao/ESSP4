@@ -441,7 +441,7 @@ def bind_resample(wave, spec, errs, wnew=default_wnew, err_cut=None):
     
     Returns
     ----------
-    array, floats
+    wnew, snew, enew: array, floats
         Spectral values and associated errors of the interpolated spectrum
     """
     # Flatten Input Data
@@ -459,7 +459,7 @@ def bind_resample(wave, spec, errs, wnew=default_wnew, err_cut=None):
     wnew_tmp = np.append(wnew,wnew[-1]+np.diff(wnew)[-1])
 
     snew, cov_new = bindensity.resampling(wnew_tmp, warr_tmp, sarr, earr**2, kind='cubic')
-    return snew, np.sqrt(cov_new[0])
+    return wnew, snew, np.sqrt(cov_new[0])
 
 # =============================================================================
 # CCF File Standardization

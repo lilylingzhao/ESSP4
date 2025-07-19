@@ -53,14 +53,15 @@ def main():
     
     ### Make Directory for Data Set if it DNE
     dset_dir = os.path.join(solar_dir,'DataSets','Training',data_set_name)
+    dir_list = ['Spectra','Merged','CCFs']
     if not os.path.isdir(dset_dir):
-        os.makedirs(os.path.join(dset_dir,'Spectra'))
-        os.makedirs(os.path.join(dset_dir,'CCFs'))
+        for dir_name in dir_list:
+            os.makedirs(os.path.join(dset_dir,dir_name))
     if np.sum(~ds_df['Training'])>0:
         vlid_dir = os.path.join(solar_dir,'DataSets','Validation',data_set_name)
         if not os.path.isdir(vlid_dir):
-            os.makedirs(os.path.join(vlid_dir,'Spectra'))
-            os.makedirs(os.path.join(vlid_dir,'CCFs'))
+            for dir_name in dir_list:
+                os.makedirs(os.path.join(vlid_dir,dir_name))
     
     ### Determine Requested Doppler Shift
     if len(args.planet_file)>0:
@@ -115,7 +116,19 @@ def main():
             hdu_list.append(fits.ImageHDU(data=data_dict[key],name=key))
         fits.HDUList(hdu_list).writeto(save_file,overwrite=True)
         tqdm.write(save_file)
-        #dict_to_fits(save_file, data_dict, hdr=head)
+
+        ### Save Merged Spectra
+        merge_file = os.path.join(dset_dir if ds_df.at[ifile,'Training'] else vlid_dir,
+                                  'Merged',ds_df.at[ifile,'Standard File Name'])
+        data_keys = ['wavelength','flux','uncertainty']
+        bind_output = bind_resample(*[data_dict[key] for key in data_keys],err_cut=None)
+        
+        hdu_s1d = fits.PrimaryHDU(data=None,header=head)
+        hdu_list_s1d = [hdu_s1d]
+        for ikey,key in enumerate(data_keys):
+            hdu_list_s1d.append(fits.ImageHDU(data=bind_output[ikey],name=key))
+        fits.HDUList(hdu_list_s1d).writeto(merge_file,overwrite=True)
+        tqdm.write(merge_file)
 
 def padIobs(iobs):
     # We want all iobs numbers to be three characters long
