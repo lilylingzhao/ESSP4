@@ -22,6 +22,9 @@ instruments = ['harpsn','harps','expres','neid']
 inst_names = ['HARPS-N','HARPS','EXPRES','NEID']
 num_inst = len(instruments)
 
+ts_dict = {inst:pd.read_csv(os.path.join(solar_dir,f'{inst}_drp.csv')).loc[:,
+           ['Time [MJD]','RV [m/s]','RV Err. [m/s]']].to_numpy().T for inst in instruments}
+
 # Instrument Colors a la ESSP #
 def rgb_to_hex(r, g, b):
     return '#{:02x}{:02x}{:02x}'.format(int(r*256), int(g*256), int(b*256))
