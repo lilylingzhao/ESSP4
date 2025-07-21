@@ -52,7 +52,7 @@ plt.legend(loc=4,ncol=4)
 # Remove Orders With Only NaNs
 
 def getNanMask(flux):
-    return np.sum(np.isfinite(hdus['wavelength'].data),axis=1)>0
+    return np.sum(np.isfinite(flux),axis=1)>0
 
 # The below loop prints the shape of the resultant data array
 #     before/after applying the NaN mask
