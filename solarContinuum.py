@@ -152,7 +152,8 @@ def solarCont(file_name):
     elif inst in ['harpsn','harps-n']:
         # Fit all orders to a simple linear fit (thank you blaze model!
         for iord in range(num_ord):
-            cont[iord] = cont_norm(wvln[iord],spec[iord],errs[iord],method='poly',deg=1)
+            cont[iord] = cont_norm(wvln[iord],spec[iord],errs[iord],
+                                   method='poly',deg=1 if iord<=4 else 2)
     elif inst == 'expres':
         hdus = fits.open(file_name)
         cont = hdus[1].data['continuum'].copy()
