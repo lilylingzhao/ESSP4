@@ -14,6 +14,10 @@ mask_dir = os.path.join(ceph_dir,'CCF_Masks','ESPRESSO')
 essp_dir = os.path.join(solar_dir,'4_DataSets','Training')
 essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
 
+# Default CCF Mask
+default_mask_file = os.path.join(mask_dir,'NEID_G2_telluricAdjusted.fits')
+#default_mask_file = os.path.join(mask_dir,'ESPRESSO_G2.fits')
+
 # =============================================================================
 # Useful Variables
 
@@ -37,21 +41,20 @@ rgbs = [(0.627,0.055,0.0),
 inst_cols = sns.color_palette(rgbs)
 
 # Time Range of Shared Data
-mon_min, mon_max = Time('2021-05-25').mjd,Time('2021-06-23').mjd
+mon_min, mon_max = Time('2021-03-23').mjd,Time('2021-06-23').mjd
 unq_day = np.arange(mon_min,mon_max).astype(int)
 def mmdd2unqmjd(mmdd):
     mm, dd = mm[:2], dd[2:]
     return int(Time(f'2021-{mm}-{dd}').mjd)
 
 # Offset For Each Instrument Using Binned, Overlap Regions
-# Calculated in 250417_instOffset.ipynb
+# Calculated in genAlignment.ipnyb
 offset_dict = {
-    'expres': -1.9809117141404522,
-    'neid': -1.108487803337379,
-    'harps': -0.26701724421038897,
-    'harpsn': 100.22080891122873
+    'neid': -648.2956247730958,
+    'expres': -651.2321534328792,
+    'harps': -0.16456447894142912,
+    'harpsn': -1.4949798091404143
 }
-
 offset_dict_essp = {
     'expres': -61.310874674375846,
     'neid': -52.04676213938201,
@@ -66,6 +69,7 @@ offset_dict_essp = {
     'harps': 575.0338367796065+0.6205850836142872,
     'harpsn': 565.0542930652725+0.7579382687852103
 }
+
 # =============================================================================
 # Instrument/File Names
 
@@ -81,7 +85,9 @@ def instrument_fullname2Nickname(inst):
 
 def fileName2Inst(file_name):
     file_name = os.path.basename(file_name)
-    if file_name[:4] == "Sun_":
+    if file_name[:2] == 'DS':
+        return 'essp'
+    elif file_name[:4] == "Sun_":
         return "expres"
     elif file_name[:7] == "neidL2_":
         return "neid"
@@ -106,6 +112,26 @@ def spec_basename2FullPath(file_name):
     inst_fullName = instrument_nickname2Fullname(inst)
     return os.path.join(solar_dir,'Spectra',inst_fullName + ('_wBlaze' if 'BLAZE' in file_name else ''),
                         file_name)
+
+def spec_spec2ccf(spec_file):
+    inst = fileName2Inst(spec_file)
+    
+    if os.path.basename(spec_file)==spec_file:
+        spec_file = spec_basename2FullPath(spec_file)
+    
+    if inst=='neid':
+        ccf_file = spec_file
+    elif inst=='expres':
+        ccf_file = os.path.join(solar_dir,'CCFs','EXPRES',os.path.basename(spec_file))
+    else:
+        base_file = os.path.basename(spec_file).replace('_BLAZE','')
+        if inst=='harpsn':
+            base_file = base_file.replace('_S2D_A','_CCF_A')
+        else:
+            base_file = base_file[2:].replace('_S2D_A','_ccf_G2_A')
+        
+        ccf_file = os.path.join(solar_dir,'CCFs',instrument_nickname2Fullname(inst),base_file)
+    return ccf_file
 
 def standardSpec_basename2FullPath(file_name):
     name_part_list = os.path.basename(file_name).split('_')
