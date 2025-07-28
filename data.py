@@ -34,7 +34,7 @@ def downSelectTimes(data_df, num_obs=3, airmass_cutoff=None, day_spread_max=2):
         mask of selected observations (corresponding to data_df dimensions)
     """
     # Gather Needed Info
-    times, airms = data_df.loc[:, ["Time [MJD]", "Airmass"]].to_numpy().T
+    times, airms = data_df.loc[np.isfinite(data_df["Time [MJD]"]), ["Time [MJD]", "Airmass"]].to_numpy().T
 
     # Make cut in airmass
     if airmass_cutoff is None:
@@ -413,7 +413,6 @@ def standardizeHeader(file_name,standard_name=None):
             inst_list, kfunc = key_funcs[key]
             if (inst in inst_list) or ('all' in inst_list):
                 value = kfunc(value)
-        
         # Save value to header dictionary
         head[key] = (value,key_map_df.at[key,'Comment'])
     hdus.close()
@@ -498,7 +497,7 @@ def readCCF(file_name,standard=False):
             time_mjd = Time(hdus[0].header['DATE-OBS']).mjd
         except:
             time_mjd = np.nan
-        ccf_head, ccf_data = hdus['ccfs'].header, hdus['ccfs'].data[12:-4].copy()
+        ccf_head, ccf_data = hdus['ccfs'].header, hdus['ccfs'].data[12:-17].copy()
         num_ord, num_vel = ccf_data.shape
         v0 = ccf_head['CCFSTART']
         vstep = ccf_head['CCFSTEP'] # km/s? 
