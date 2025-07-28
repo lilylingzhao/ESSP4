@@ -8,9 +8,9 @@ from astropy.time import Time
 from tqdm import tqdm
 
 import sys
-sys.path.append('/mnt/home/lzhao/SolarComparison/ESSP4/')
-from utils import solar_dir, standardFile_file2inst, offset_dict_essp
-from ccf import ccf, ccfFit, default_mask_file
+sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
+from utils import solar_dir, standardFile_file2inst, offset_dict_essp, instrument_nickname2Fullname
+from ccf import ccf, ccfFit, default_mask_file, vwidth_dict
 
 def main():
     
@@ -35,10 +35,8 @@ def main():
                         help='Center of velocity grid in km/s')
     parser.add_argument('--vspacing',type=float,default=.4,
                         help='Velocity spacing in km/s')
-    
-    # iCCF Specific
-    parser.add_argument('--mask_width',type=float,default=0.5,
-                        help='Mask width for iCCF')
+    parser.add_argument('--cont_norm', action='store_true',
+                        help="Continuum normalize spectra")
     
     # CCF Fitting
     parser.add_argument('--fit-range',type=int,default=12,
@@ -66,8 +64,6 @@ def main():
         'v0':float(args.v0),
         'vspacing':float(args.vspacing),
     }
-    if args.iccf:
-        ccf_params = {'mask_width':float(args.mask_width)}
     
     for file in tqdm(file_list,desc='CCFs'):
         inst = standardFile_file2inst(file)
@@ -75,7 +71,9 @@ def main():
         if os.path.isfile(ccf_file) and not args.overwrite:
             continue
         time, v_grid, ccfs, e_ccfs, orders = ccf(file,use_iccf=args.iccf,
-                                                 mask_file=args.mask_file,**ccf_params)
+                                                 mask_file=args.mask_file,
+                                                 cont_norm=args.cont_norm,
+                                                 **ccf_params)
         
         
         sampling = 2 if inst in ['harps','harpsn'] else 1
@@ -90,19 +88,26 @@ def main():
             ccf_rv, ccf_rv_e = np.around(ccf_rv,3), np.around(ccf_rv_e,3)
 
         ccf_head = fits.Header()
+        ccf_head['spec'] = (os.path.basename(file), 'Spectral file')
+        ccf_head['inst'] = (instrument_nickname2Fullname(inst), 'Instrument')
         ccf_head['time'] = (time, 'Time of observation [eMJD]')
         ccf_head['date-ccf'] = (Time.now().fits, 'Time of CCF calculation')
-        ccf_head['pipeline'] = 'iCCF' if args.iccf else 'EXPRES'
-        ccf_head['rv'] = (ccf_rv-offset_dict_essp[inst], 'Best-fit CCF RV in m/s')
+        ccf_head['pipeline'] = ('iCCF' if args.iccf else 'EXPRES', 'Code used to derive CCFs')
+        ccf_head['normed'] = (args.cont_norm, 'If the spectra were normalized')
+        ccf_head['rv'] = (ccf_rv, 'Best-fit CCF RV in m/s')
         ccf_head['e_rv'] = (ccf_rv_e, 'CCF RV Error m/s')
         ccf_head['mask'] = (os.path.basename(args.mask_file), 'CCF mask file used')
+        ccf_head['window'] = ('box', 'CCF mask window used')
+        ccf_head['mwidth'] = (vwidth_dict[inst], 'Mask width for iCCF in km/s')
         for key in ccf_params:
             if key=='obo_rv':
-                ccf_head[key] = (ccf_params[key]-offset_dict_essp[inst], ccf_head_comments[key])
+                ccf_head[key] = (ccf_params[key], ccf_head_comments[key])
             else:
                 ccf_head[key] = (ccf_params[key], ccf_head_comments[key])
         ccf_head['sigma_v'] = (float(args.sigma_v), 'Initial guess of sigma in km/s')
-        ccf_head['rv_guess'] = (float(args.rv_guess), 'Initial guess of mean in km/s')
+        ccf_head['rv0'] = (float(args.rv_guess), 'Initial guess of mean in km/s')
+        ccf_head['weighted'] = (True, 'If the orders are weighted')
+        ccf_head['offset'] = (offset_dict_essp[inst], 'Suggested instrumental offset')
         
         ### Save FITS File
         hdu = fits.PrimaryHDU(data=None,header=ccf_head)
@@ -116,8 +121,6 @@ ccf_head_comments = {
     'vrange': '+/- range of velcity in km/s',
     'v0': 'Center of velocity grid in km/s',
     'vspacing': 'Velocity spacing in km/s',
-    'mask_width': 'Mask width for iCCF in ?',
-    'vwidth': 'Automatic velocity width of the mask in km/s',
     'npix': 'Number of pixels used around CCF window',
 }
 

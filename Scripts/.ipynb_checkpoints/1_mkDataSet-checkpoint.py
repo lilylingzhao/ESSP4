@@ -3,7 +3,7 @@ import argparse
 from tqdm import tqdm
 
 import sys
-sys.path.append('/mnt/home/lzhao/SolarComparison/ESSP4/')
+sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
 from utils import solar_dir, instruments, mon_min, offset_dict
 from data import *
 from solarContinuum import solarCont
@@ -19,6 +19,8 @@ def main():
     # Selecting observations
     parser.add_argument('-n','--num-obs',type=int,default=3,
                         help='Number of observations to select per night')
+    parser.add_argument('-n','--num-day',type=int,default=30,
+                        help='Number of days to select per data set')
     parser.add_argument('-x','--target-expt',type=float,default=0,
                         help='Target exposure time when identifying observations to average')
 
@@ -53,14 +55,15 @@ def main():
     
     ### Make Directory for Data Set if it DNE
     dset_dir = os.path.join(solar_dir,'DataSets','Training',data_set_name)
+    dir_list = ['Spectra','CCFs']
     if not os.path.isdir(dset_dir):
-        os.makedirs(os.path.join(dset_dir,'Spectra'))
-        os.makedirs(os.path.join(dset_dir,'CCFs'))
+        for dir_name in dir_list:
+            os.makedirs(os.path.join(dset_dir,dir_name))
     if np.sum(~ds_df['Training'])>0:
         vlid_dir = os.path.join(solar_dir,'DataSets','Validation',data_set_name)
         if not os.path.isdir(vlid_dir):
-            os.makedirs(os.path.join(vlid_dir,'Spectra'))
-            os.makedirs(os.path.join(vlid_dir,'CCFs'))
+            for dir_name in dir_list:
+                os.makedirs(os.path.join(vlid_dir,dir_name))
     
     ### Determine Requested Doppler Shift
     if len(args.planet_file)>0:
@@ -115,7 +118,6 @@ def main():
             hdu_list.append(fits.ImageHDU(data=data_dict[key],name=key))
         fits.HDUList(hdu_list).writeto(save_file,overwrite=True)
         tqdm.write(save_file)
-        #dict_to_fits(save_file, data_dict, hdr=head)
 
 def padIobs(iobs):
     # We want all iobs numbers to be three characters long
@@ -140,7 +142,7 @@ def getStandardFiles(ds_df,data_set):
             viobs += 1
     return files
 
-def getObs(data_set,num_obs,target_expt=0,
+def getObs(data_set,num_obs,num_day=None,target_expt=0,
            validation_mode='',validation_amount=None,time0=0):
     ### Select Observations for Data Set
     df_list = []
@@ -173,9 +175,23 @@ def getObs(data_set,num_obs,target_expt=0,
         
         df_list.append(inst_ds_df)
     
-    
     ### Generate File Describing Data Set Files
     ds_df = pd.concat(df_list).sort_values(by='Time [MJD]').reset_index() # combine info from all four instruments
+    # Down Select Days if Specified
+    if num_day is not None:
+        tint = ds_df['Time [MJD]'].to_numpy().astype(int)
+        unq_day = np.unique(tint)
+        if num_day>len(unq_day):
+            # You want more days than there are,
+            #     so keep them all!
+            day_mask = np.ones(len(ds_df),dtype=bool)
+        else:
+            day_mask = np.zeros(len(ds_df),dtype=bool)
+            days_to_keep = np.random.choice(unq_day,num_day)
+            for day in days_to_keep:
+                day_mask[tint==day] = True
+        ds_df = ds_df[day_mask].reset_index()
+    # Add standard file names
     ds_df['Standard File Name'] = getStandardFiles(ds_df,data_set)
     # Define Periodic T/V Set Here so Data From All Instruments are Masked in Same Way
     if (validation_mode.lower() == 'nperiodic'):

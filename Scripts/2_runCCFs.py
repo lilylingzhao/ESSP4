@@ -8,7 +8,7 @@ from astropy.time import Time
 from tqdm import tqdm
 
 import sys
-sys.path.append('/mnt/home/lzhao/SolarComparison/ESSP4/')
+sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
 from utils import solar_dir, standardFile_file2inst, offset_dict_essp, instrument_nickname2Fullname
 from ccf import ccf, ccfFit, default_mask_file, vwidth_dict
 
@@ -87,7 +87,7 @@ def main():
         else:
             ccf_rv, ccf_rv_e = np.around(ccf_rv,3), np.around(ccf_rv_e,3)
 
-        ccf_head = fits.Header
+        ccf_head = fits.Header()
         ccf_head['spec'] = (os.path.basename(file), 'Spectral file')
         ccf_head['inst'] = (instrument_nickname2Fullname(inst), 'Instrument')
         ccf_head['time'] = (time, 'Time of observation [eMJD]')
@@ -107,7 +107,7 @@ def main():
         ccf_head['sigma_v'] = (float(args.sigma_v), 'Initial guess of sigma in km/s')
         ccf_head['rv0'] = (float(args.rv_guess), 'Initial guess of mean in km/s')
         ccf_head['weighted'] = (True, 'If the orders are weighted')
-        ccf_head['offset'] = (offset_dict_essp[inst], 'Suggested instrumetnal offset')
+        ccf_head['offset'] = (offset_dict_essp[inst], 'Suggested instrumental offset')
         
         ### Save FITS File
         hdu = fits.PrimaryHDU(data=None,header=ccf_head)

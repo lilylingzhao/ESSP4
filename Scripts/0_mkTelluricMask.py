@@ -3,7 +3,7 @@ import argparse
 from tqdm import tqdm
 
 import sys
-sys.path.append('/mnt/home/lzhao/SolarComparison/ESSP4/')
+sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
 from utils import solar_dir, instruments
 from planetInjection import *
 
