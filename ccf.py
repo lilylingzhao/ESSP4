@@ -9,12 +9,11 @@ sys.path.append('./ESSP4/')
 from utils import *
 from data import readCCF
 
-from expres.rv.ccf import generate_ccf_mask, order_wise_ccfs
+#from expres.rv.ccf import generate_ccf_mask, order_wise_ccfs
 from iCCF.meta import espdr_compute_CCF_fast
 
-default_mask_file = os.path.join(mask_dir,'NEID_G2.fits')
-#default_mask_file = os.path.join(mask_dir,'ESPRESSO_G2.fits')
-
+# Default width of CCF mask lines for each instrument in km/s
+vwidth_dict = {'harps':.82,'harpsn':.82,'expres':.56,'neid':1.}
 
 # =============================================================================
 # iCCF
@@ -38,13 +37,13 @@ def iccf(wave,spec,errs,blaz,berv,qual=None,
          mask_file=default_mask_file,
          bervmax=32,mask_width=0.5):
     
+    # Set the velocity grid for the CCF
+    v_grid = v0 + np.arange(-vrange, vrange+vspacing*0.5, vspacing)
+    
     # Need to mask out all NaNs for it to work
     m = np.isfinite(wave) & np.isfinite(spec) & np.isfinite(errs) & np.isfinite(blaz)
     if np.sum(m)==0:
         return np.full((3,len(v_grid)),np.nan)
-    
-    # Set the velocity grid for the CCF
-    v_grid = v0 + np.arange(-vrange, vrange+vspacing*0.5, vspacing)
 
     # Element-wise difference in wavelength
     ll = wave[m].copy()
@@ -67,9 +66,6 @@ def iccf(wave,spec,errs,blaz,berv,qual=None,
 
 # =============================================================================
 # EXPRES CCF
-
-# Default width of CCF mask lines for each instrument in m/s
-vwidth_dict = {'harps':.82,'harpsn':.82,'expres':.56,'neid':1.}
 
 def eccf_orderwise(wvln,spec,errs,echl_ord0=161,
                    mask_file=default_mask_file,npix=10,
@@ -205,13 +201,14 @@ def ccf(spec_file,use_iccf=False,
     
     # Run CCF for All Orders
     if use_iccf:
+        wvln = vactoair(wvln)
         # Loop through all orders
         ccfs = None
         for iord in range(num_ord):
             v_grid, ccf, e_ccf = iccf(wvln[iord],spec[iord],errs[iord],
-                                      blaz[iord],berv,**kwargs)
+                                      blaz[iord],berv,mask_width=vwidth_dict[inst],**kwargs)
             if ccfs is None:
-                ccfs, e_ccfs = np.full((2,iord,len(v_grid)),np.nan)
+                ccfs, e_ccfs = np.full((2,num_ord,len(v_grid)),np.nan)
             ccfs[iord] = ccf.copy()
             e_ccfs[iord] = e_ccf.copy()
         orders = 161-np.arange(num_ord)
