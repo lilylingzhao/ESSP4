@@ -3,7 +3,8 @@ import os
 from glob import glob
 import numpy as np
 import matplotlib.pyplot as plt
-from astropy.io import fits
+from astropy.io import fitsfrom astropy.io import fits
+from scipy.interpolate import interp1d
 import seaborn as sns
 
 # Specify file name
@@ -87,4 +88,40 @@ for iinst,inst in enumerate(['harpsn','harps','expres','neid']):
         ax.plot(v_grid,obo_ccf[nord]/np.nanmax(obo_ccf[nord]),color=colors[nord])
     # Plot global CCF
     ax.plot(v_grid,ccf/np.nanmax(ccf),color='k',lw=3)
+fig.tight_layout()
+
+# =============================================================================
+# Shift CCFs by Provided Offsets
+
+def shiftCCF(ccf_x,ccf_y,rv):
+    return interp1d(ccf_x-rv/1000,ccf_y,kind='cubic',bounds_error=False)(ccf_x)
+
+# Read in offsets, which should be subtracted
+offset_file = 
+offset_dict = dict(zip(*np.loadtxt(offset_file),
+                       delimiter=',',unpack=True,dtype=str)))
+offset_dict = {key:float(val) for key,val in offset_dict.items()}
+
+# Plot Original CCFs and Shifted CCFs
+fig, (ax1, ax2) = plt.subplots(1,2,figsize=(6,3))
+ax1.set_title('CCFs')
+ax2.set_title('Shifted CCFs')
+for ax in [ax1,ax2]:
+    ax.set_xlabel('Velocity [km/s]')
+    ax.set_ylabel('Normalized Counts')
+    
+for iinst,inst in enumerate(['harpsn','harps','expres','neid']):
+    # Select a random file
+    file = np.random.choice(glob(os.path.join(essp_dir,f'DS{dset_num}','CCFs',f'DS{dset_num}*_{inst}.fits')))
+    
+    # Read in data
+    hdus = fits.open(file)
+    v_grid = hdus['v_grid'].data.copy() # velocity grid for all CCFs in the file
+    ccf = hdus['ccf'].data.copy()
+    hdus.close()
+    
+    # Plot Summed/Average CCF
+    ax1.plot(v_grid,ccf/np.nanmax(ccf),alpha=0.5)
+    # Plot Shifted CCF
+    ax2.plot(v_grid,shiftCCF(v_grid,ccf/np.nanmax(ccf),offset_dict[inst]),alpha=0.5)
 fig.tight_layout()
