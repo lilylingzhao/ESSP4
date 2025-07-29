@@ -11,8 +11,8 @@ from scipy.signal import medfilt
 from tqdm import tqdm
 import pandas as pd
 
-import rebound
-from spock import FeatureClassifier
+#import rebound
+#from spock import FeatureClassifier
 
 from kepler import getRV, getRV_K, getMfromK
 

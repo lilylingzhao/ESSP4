@@ -48,7 +48,8 @@ def main():
     
     ### Select Observations for Data Set
     ds_df = getObs(data_set_name,
-                   num_obs=int(args.num_obs),target_expt=float(args.target_expt),
+                   num_obs=int(args.num_obs),num_day=int(args.num_day),
+                   target_expt=float(args.target_expt),
                    validation_mode=args.validation_mode,
                    validation_amount=int(args.validation_amount),
                    time0=time0)
