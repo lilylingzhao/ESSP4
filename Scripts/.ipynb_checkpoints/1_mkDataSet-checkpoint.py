@@ -19,7 +19,7 @@ def main():
     # Selecting observations
     parser.add_argument('-n','--num-obs',type=int,default=3,
                         help='Number of observations to select per night')
-    parser.add_argument('-n','--num-day',type=int,default=60,
+    parser.add_argument('-o','--num-day',type=int,default=60,
                         help='Number of days to select per data set')
     parser.add_argument('-x','--target-expt',type=float,default=0,
                         help='Target exposure time when identifying observations to average')
