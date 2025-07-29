@@ -125,3 +125,19 @@ for inst in ['harpsn','harps','expres','neid']:
     plt.plot(wave[nord][nord_mask],(spec[nord]/cont[nord])[nord_mask],label=inst)
     hdus.close()
 plt.legend(loc=4,ncol=4)
+
+# =============================================================================
+# Merged Spectra
+plt.figure(figsize=(12,3))
+plt.xlabel('Wavelength [A]')
+plt.ylabel('Normalized Counts')
+for inst in ['harpsn','harps','expres','neid']:
+    file = np.random.choice(glob(os.path.join(essp_dir,f'DS{dset_num}','Merged',f'DS{dset_num}*_{inst}.fits')))
+    hdus = fits.open(file)
+    wave = hdus['wavelength'].data.copy()
+    spec = hdus['flux'].data.copy()
+    hdus.close()
+    
+    plt.plot(wave,spec,label=inst)
+    hdus.close()
+plt.legend(loc=4,ncol=4)

@@ -37,18 +37,19 @@ def main():
 
             # Read in spectrum
             hdus = fits.open(file)
+            head = hdus[0].header
             wave = hdus['wavelength'].data.copy()
             spec = (hdus['flux'].data/hdus['continuum'].data).copy()
             errs = hdus['uncertainty'].data.copy()
             hdus.close()
-
+            
             # Interpolate onto default wavelength grid
             bind_output = bind_resample(wave,spec,errs)
 
             # Save merged spectrum
-            hdu_s1d = fits.PrimaryHDU(data=None,header=head)
-            hdu_list_s1d = [hdu_s1d]
+            hdu_s2d = fits.PrimaryHDU(data=None,header=head)
+            hdu_list_s2d = [hdu_s2d]
             for ikey,key in enumerate(['wavelength','flux','uncertainty']):
-                hdu_list_s1d.append(fits.ImageHDU(data=bind_output[ikey],name=key))
-            fits.HDUList(hdu_list_s1d).writeto(merge_file,overwrite=True)
+                hdu_list_s2d.append(fits.ImageHDU(data=bind_output[ikey],name=key))
+            fits.HDUList(hdu_list_s2d).writeto(merge_file,overwrite=True)
             tqdm.write(merge_file)
