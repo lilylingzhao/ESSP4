@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 import sys
 sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
-from utils import solar_dir, instruments, mon_min, offset_dict
+from utils import solar_dir, essp_dir, instruments, mon_min, offset_dict
 from data import *
 from solarContinuum import solarCont
 from planetInjection import getRvTimeSeries, injectPlanet
@@ -54,13 +54,13 @@ def main():
                    time0=time0)
     
     ### Make Directory for Data Set if it DNE
-    dset_dir = os.path.join(solar_dir,'DataSets','Training',data_set_name)
+    dset_dir = os.path.join(essp_dir,'Training',data_set_name)
     dir_list = ['Spectra','CCFs']
     if not os.path.isdir(dset_dir):
         for dir_name in dir_list:
             os.makedirs(os.path.join(dset_dir,dir_name))
     if np.sum(~ds_df['Training'])>0:
-        vlid_dir = os.path.join(solar_dir,'DataSets','Validation',data_set_name)
+        vlid_dir = os.path.join(essp_dir,'Validation',data_set_name)
         if not os.path.isdir(vlid_dir):
             for dir_name in dir_list:
                 os.makedirs(os.path.join(vlid_dir,dir_name))
@@ -208,7 +208,7 @@ def getObs(data_set,num_obs,num_day=None,target_expt=0,
         ds_df['Time [eMJD]'] = ds_df['Time [MJD]']-mon_min+time0
     
     # Save Summary File
-    ds_df.to_csv(os.path.join(solar_dir,'DataSets',f'{data_set}.csv'),index=False)
+    ds_df.to_csv(os.path.join(essp_dir,f'{data_set}.csv'),index=False)
     
     return ds_df
 

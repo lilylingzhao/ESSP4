@@ -7,11 +7,10 @@ from astropy.time import Time
 import pandas as pd
 import seaborn as sns
 
-ceph_dir_local = '/Users/lilyzhao/Documents/ceph'
 ceph_dir = '/Volumes/Hasbrouck/ceph/'
 solar_dir = os.path.join(ceph_dir,'ESSP_Solar',)
 mask_dir = os.path.join(ceph_dir,'CCF_Masks','ESPRESSO')
-essp_dir = os.path.join(solar_dir,'4_DataSets','Training')
+essp_dir = os.path.join(solar_dir,'4_DataSets')
 essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
 
 # Default CCF Mask

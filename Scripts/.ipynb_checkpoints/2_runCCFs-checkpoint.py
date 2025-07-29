@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 import sys
 sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
-from utils import solar_dir, standardFile_file2inst, offset_dict_essp, instrument_nickname2Fullname
+from utils import essp_dir, standardFile_file2inst, offset_dict_essp, instrument_nickname2Fullname
 from ccf import ccf, ccfFit, default_mask_file, vwidth_dict
 
 def main():
@@ -50,11 +50,11 @@ def main():
     
     # Gather Files
     if not args.data_set:
-        file_list = glob(os.path.join(solar_dir,'DataSets','*','*','Spectra','*.fits'))
+        file_list = glob(os.path.join(essp_dir,'*','*','Spectra','*.fits'))
     else:
         file_list = []
         for dset_num in args.data_set:
-            file_list.append(glob(os.path.join(solar_dir,'DataSets','*',f'DS{dset_num}','Spectra','*.fits')))
+            file_list.append(glob(os.path.join(essp_dir,'*',f'DS{dset_num}','Spectra','*.fits')))
         file_list = np.concatenate(file_list)
     file_list = np.sort(file_list)
     

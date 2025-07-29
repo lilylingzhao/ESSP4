@@ -27,9 +27,9 @@ def main():
     
     # Gather Data Sets
     if not args.data_set:
-        dset_list = glob(os.path.join(solar_dir,'DataSets','DS*.csv'))
+        dset_list = glob(os.path.join(essp_dir,'DS*.csv'))
     else:
-        dset_list = [os.path.join(solar_dir,'DataSets',f'DS{dset_num}.csv') for dset_num in args.data_set]
+        dset_list = [os.path.join(essp_dir,f'DS{dset_num}.csv') for dset_num in args.data_set]
     
     for dset in dset_list:
         dset_name = os.path.basename(dset)[:-4]

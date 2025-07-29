@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 import sys
 sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
-from utils import solar_dir, instruments, mon_min, offset_dict
+from utils import essp_dir, instruments, mon_min, offset_dict
 from data import *
 from mergeSpec import bind_resample
 
@@ -25,7 +25,7 @@ def main():
     data_set_name = f'DS{data_set_num}'
 
     for sub_folder in ['Training','Validation']:
-        dset_dir = os.path.join(solar_dir,'DataSets',sub_folder,data_set_name)
+        dset_dir = os.path.join(essp_dir,sub_folder,data_set_name)
 
         merge_dir = os.path.join(dset_dir,'Merged')
         if not os.path.isdir(merge_dir):
