@@ -3,6 +3,7 @@
 #           so both cannot be at play at the same time
 # https://www.astro.unige.ch/~delisle/bindensity/doc/_autosummary/bindensity.resampling.html#bindensity.resampling
 import bindensity
+import numpy as np
 
 # =============================================================================
 # Merge Spectra
@@ -41,5 +42,6 @@ def bind_resample(wave, spec, errs, wnew=default_wnew, err_cut=None):
     warr_tmp = np.append(warr,warr[-1]+np.diff(warr)[-1])
     wnew_tmp = np.append(wnew,wnew[-1]+np.diff(wnew)[-1])
 
-    snew, cov_new = bindensity.resampling(wnew_tmp, warr_tmp, sarr, earr**2, kind='cubic')
+    snew, cov_new = bindensity.resampling(wnew_tmp, warr_tmp, sarr,
+                                          np.array([earr**2]), kind='cubic')
     return wnew, snew, np.sqrt(cov_new[0])
