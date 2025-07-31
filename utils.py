@@ -7,6 +7,7 @@ from astropy.time import Time
 import pandas as pd
 import seaborn as sns
 
+ceph_dir_local = '/Users/lilyzhao/Documents/ceph/'
 ceph_dir = '/Volumes/Hasbrouck/ceph/'
 solar_dir = os.path.join(ceph_dir,'ESSP_Solar',)
 mask_dir = os.path.join(ceph_dir,'CCF_Masks','ESPRESSO')
@@ -48,26 +49,24 @@ def mmdd2unqmjd(mmdd):
 
 # Offset For Each Instrument Using Binned, Overlap Regions
 # Calculated in genAlignment.ipnyb
-offset_dict = {
+drp_offset = {
     'neid': -648.2956247730958,
-    'expres': -651.2321534328792,
+    'expres': -651.2321534973294,
     'harps': -0.16456447894142912,
     'harpsn': -1.4949798091404143
 }
-offset_dict_essp = {
-    'expres': -61.310874674375846,
-    'neid': -52.04676213938201,
-    'harps': 575.8334149163857,
-    'harpsn': 565.6070617312148
+
+# Calculated for iCCF DRP RVs in 250729_checkIccf.ipynb
+iccf_offset = {
+    'neid': -79.735444958673,
+    'expres': -88.60501568816387,
+    #'harps': 557.5480840931398,
+    'harps' : 551.6919999732906, # special edit from 250730_harpsDS
+    'harpsn': 546.3609640230954
 }
 
-# Edit for DS0 (still debugging why this is necessary)
-offset_dict_essp = {
-    'expres': -61.53249302289472+9.651874674375843,
-    'neid': -51.914834793447966+9.698762139382012,
-    'harps': 575.0338367796065+0.6205850836142872,
-    'harpsn': 565.0542930652725+0.7579382687852103
-}
+pd.DataFrame.from_dict(iccf_offset,orient='index',columns=['offset']).to_csv(
+    os.path.join(solar_dir,'instrument_offsets_iccf.csv'),header=False)
 
 # =============================================================================
 # Instrument/File Names
@@ -135,7 +134,7 @@ def spec_spec2ccf(spec_file):
 def standardSpec_basename2FullPath(file_name):
     name_part_list = os.path.basename(file_name).split('_')
     dset_name = name_part_list[0].split('.')[0]
-    full_name = os.path.join(solar_dir,'DataSets',
+    full_name = os.path.join(essp_dir,
                              'Validation' if 'v' in name_part_list else 'Training',
                               dset_name,'Spectra',os.path.basename(file_name))
     
