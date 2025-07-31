@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 import sys
 sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
-from utils import solar_dir, essp_dir, instruments, mon_min, offset_dict
+from utils import solar_dir, essp_dir, instruments, mon_min, drp_offset
 from data import *
 from solarContinuum import solarCont
 from planetInjection import getRvTimeSeries, injectPlanet
@@ -56,7 +56,7 @@ def main():
     
     ### Make Directory for Data Set if it DNE
     dset_dir = os.path.join(essp_dir,'Training',data_set_name)
-    dir_list = ['Spectra','CCFs']
+    dir_list = ['Spectra','Merged','CCFs']
     if not os.path.isdir(dset_dir):
         for dir_name in dir_list:
             os.makedirs(os.path.join(dset_dir,dir_name))
@@ -149,7 +149,7 @@ def getObs(data_set,num_obs,num_day=None,target_expt=0,
     df_list = []
     for iinst,inst in enumerate(instruments):
         inst_df = pd.read_csv(os.path.join(solar_dir,f'{inst}_drp.csv'))
-        inst_df['RV [m/s]'] = inst_df['RV [m/s]']-offset_dict[inst]
+        inst_df['RV [m/s]'] = inst_df['RV [m/s]']-drp_offset[inst]
         
         # Select Observations
         if target_expt==0: # no averaging of observations needed
@@ -192,6 +192,7 @@ def getObs(data_set,num_obs,num_day=None,target_expt=0,
             for day in days_to_keep:
                 day_mask[tint==day] = True
         ds_df = ds_df[day_mask].reset_index()
+        del ds_df['level_0']
     # Add standard file names
     ds_df['Standard File Name'] = getStandardFiles(ds_df,data_set)
     # Define Periodic T/V Set Here so Data From All Instruments are Masked in Same Way
