@@ -97,7 +97,7 @@ def shiftCCF(ccf_x,ccf_y,rv):
     return interp1d(ccf_x-rv/1000,ccf_y,kind='cubic',bounds_error=False)(ccf_x)
 
 # Read in offsets, which should be subtracted
-offset_file = 
+offset_file = 'instrument_offsets_iccf.csv'
 offset_dict = dict(zip(*np.loadtxt(offset_file),
                        delimiter=',',unpack=True,dtype=str)))
 offset_dict = {key:float(val) for key,val in offset_dict.items()}
