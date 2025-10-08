@@ -57,12 +57,14 @@ drp_offset = {
 }
 
 # Calculated for iCCF DRP RVs in 250729_checkIccf.ipynb
+# Re-calculated Oct 8, 2025
+
 iccf_offset = {
     'neid': -79.735444958673,
     'expres': -88.60501568816387,
-    #'harps': 557.5480840931398,
-    'harps' : 551.6919999732906, # special edit from 250730_harpsDS
-    'harpsn': 546.3609640230954
+    #'harps': 572.2307171431381,
+    'harps' : 566.2583461658813, # special edit from 250730_harpsDS
+    'harpsn': 460.05051489822205
 }
 
 pd.DataFrame.from_dict(iccf_offset,orient='index',columns=['offset']).to_csv(
