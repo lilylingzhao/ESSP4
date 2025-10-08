@@ -258,6 +258,11 @@ def selectValidationSet(data_df, mode, validation_amount):
 # =============================================================================
 # Spectral File Standardization
 
+harpsn_dace = pd.read_csv(os.path.join(solar_dir,'harpsn_dace.csv')).set_index('file_root')
+harpsn_corr = ['berv_bary_to_helio','rv_diff_extinction','rv_optimised_corr']
+harps_corr = pd.read_csv(os.path.join(solar_dir,'Indicators',
+                         'harps_indicators_iCCF_corrected.csv')).set_index('File Name')
+
 def readL2(file_name,pad_orders=False):
     """Return spectrum from any solar observation file
 
@@ -287,13 +292,21 @@ def readL2(file_name,pad_orders=False):
         
         # Get HDUS w/ and w/o Blaze
         if '_wBlaze' in file_name:
-            hdus = fits.open(getHarpsNoBlazeFile(file_name))
-            blaz_hdus = fits.open(file_name)
+            wblz_file = file_name
+            nblz_file = getHarpsNoBlazeFile(file_name)
         else:
-            hdus = fits.open(file_name)
-            blaz_hdus = fits.open(getHarpsBlazeFile(file_name))
+            wblz_file = getHarpsBlazeFile(file_name)
+            nblz_file = file_name
+        hdus = fits.open(nblz_file)
+        blaz_hdus = fits.open(wblz_file)
         
         wave = hdus['wavedata_vac_bary'].data.copy()
+        if inst=='harps':
+            rv_corr = harps_corr.loc[os.path.basename(wblz_file),'RV [m/s] (correction)']
+        else:
+            file_root = os.path.basename(nblz_file)[2:-11]
+            rv_corr = (harpsn_dace.loc[file_root,harpsn_corr].sum()+0.16759939657)*-1000
+        wave *= (1+rv_corr/c.value)
         spec = blaz_hdus['scidata'].data.copy()
         spec_woB = hdus['scidata'].data.copy()
         errs = blaz_hdus['errdata'].data.copy()
@@ -441,7 +454,7 @@ def readCCF(file_name,standard=False):
        wavelength, flux, error, and blaze of spectrum from file_name
         
     """
-    inst = 'expres' if standard else fileName2Inst(file_name)
+    inst = fileName2Inst(file_name)
       
     hdus = fits.open(file_name)
     if standard:
