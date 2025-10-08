@@ -92,7 +92,7 @@ def getBisector(x,y,yerr,
     G_A, G_mu, G_sig, G_m, G_b = popt
     
     # Bisector vertical points depending on specified resolution
-    bis_y = np.linspace(y.min(),(G_m*(x[np.argmin(y)])+G_b),num_y_pts+2)[1:-1]
+    bis_y = np.linspace(y.min(),(G_m*(x[np.argmin(y)])+G_b)*.95,num_y_pts+2)[1:-1]
     bis_l, bis_r = np.full((2,num_y_pts),np.nan)
     
     # Interpolate the CCF
