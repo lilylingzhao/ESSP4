@@ -30,6 +30,7 @@ def main():
         dset_list = glob(os.path.join(essp_dir,'DS*.csv'))
     else:
         dset_list = [os.path.join(essp_dir,f'DS{dset_num}.csv') for dset_num in args.data_set]
+
     
     for dset in dset_list:
         dset_name = os.path.basename(dset)[:-4]
@@ -94,8 +95,16 @@ def main():
                     e_fwhm = np.nan
                 if not np.isfinite(e_contrast):
                     e_contrast = np.nan
-                ds_df.at[file,'CCF FWHM [km/s]'], ds_df.at[file,'CCF FWHM Err. [km/s]'] = fwhm, e_fwhm
-                ds_df.at[file,'CCF Contrast'], ds_df.at[file,'CCF Contrast Err.'] = contrast, e_contrast
+
+                # Load in Raw Files
+                ds_df.at[file,'CCF FWHM [km/s] Raw'], ds_df.at[file,'CCF FWHM Err. [km/s]'] = fwhm, e_fwhm
+                ds_df.at[file,'CCF Contrast Raw'], ds_df.at[file,'CCF Contrast Err.'] = contrast, e_contrast
+                # Load in Corrections/Corrected Values
+                fcorr = corr_dict[inst].loc[ds_df.loc[file,'File Name'],'CCF FWHM [km/s] (correction)']
+                fwhm_corr = np.sqrt(fwhm**2+fcorr**2)
+                contrast_corr = contrast * fwhm/fwhm_corr
+                ds_df.at[file,'CCF FWHM [km/s]'], ds_df.at[file,'CCF FWHM [km/s] Correction'] = fwhm_corr, fcorr
+                ds_df.at[file,'CCF Contrast'] = contrast_corr
             except:
                 tqdm.write(f'Failed to fit CCF to Gaussian for: {file}')
             # BIS
@@ -118,7 +127,11 @@ cols_final = ['Time [eMJD]','RV [m/s]', 'RV Err. [m/s]',
               'Exp. Time [s]', 'Airmass', 'BERV [km/s]', 'Instrument',
               'CCF FWHM [km/s]','CCF FWHM Err. [km/s]',
               'CCF Contrast','CCF Contrast Err.',
-              'BIS [m/s]','H-alpha Emission','CaII Emission']
+              'BIS [m/s]','H-alpha Emission','CaII Emission',
+              'CCF FWHM [km/s] Raw','CCF FWHM [km/s] Correction',
+              'CCF Contrast Raw']
+
+corr_dict = {inst:pd.read_csv(f'../Corrections/{inst}_corrections.csv').set_index('File Name') for inst in instruments}
 
 if __name__ == '__main__':
     import sys
