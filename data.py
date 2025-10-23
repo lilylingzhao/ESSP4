@@ -368,7 +368,7 @@ key_funcs = {
                   lambda file_name : os.path.basename(file_name).split('.')[0]),
     'date'     : (['all'],
                   lambda file_name : Time.now().fits),
-    'mjd_utc'  : (['harps','harpsn','neid'],
+    'mjd_utc'  : (['neid'],
                   lambda jd : Time(jd,format='jd').mjd),
     'jd_utc'   : (['expres'],
                   lambda mjd : Time(mjd,format='mjd').jd),
@@ -377,7 +377,10 @@ key_funcs = {
     'obslat'   : (['harpsn'],
                   lambda geolat : dms2deg(geolat)),
 }
-
+hjd_dict = {'harps':pd.read_csv(os.path.join(solar_dir,'harps_drp.csv'),
+                                usecols=['File Name','Time [MJD]']).set_index('File Name'),
+            'harpsn':pd.read_csv(os.path.join(solar_dir,'harpsn_drp.csv'),
+                                 usecols=['File Name','Time [MJD]']).set_index('File Name')}
 def standardizeHeader(file_name,standard_name=None):
     """Read header and change to standardized version
 
@@ -410,11 +413,15 @@ def standardizeHeader(file_name,standard_name=None):
                 value = standard_name
             else:
                 standard_name = os.path.basename(file_name)
-        elif inst.lower()=='neid' and key.lower()=='berv':
+        elif inst=='neid' and key.lower()=='berv':
             # NEID BERV is a special case
             # Need to average over all the order-by-order values
             ord_list = range(52,174)
             value = np.nanmedian([hdus[0].header[f'SSBRV0{nord}' if nord<100 else f'SSBRV{nord}'] for nord in ord_list])
+        elif inst in ['harps','harpsn'] and key.lower() in ['mjd_utc','jd_utc']:
+            file_key = os.path.basename(file_name if 'BLAZE 'in file_name else getHarpsBlazeFile(file_name))
+            mjd_hjd = hjd_dict[inst].at[file_key,'Time [MJD]']
+            value = mjd_hjd if key.lower()=='mjd_utc' else Time(mjd_hjd,format='mjd').jd
         else:
             try:
                 value = hdus[key_inst_idx].header[key_inst_key]
