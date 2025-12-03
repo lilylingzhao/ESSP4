@@ -152,7 +152,7 @@ for og_file in file_list:
 
 
 # =============================================================================
-# TeamLSD
+# LSD
 
 og_team_name = 'TeamLSD'
 team_name = 'LSD'
@@ -198,6 +198,34 @@ for og_file in file_list:
 shutil.copy(os.path.join(box_dir,og_team_name,'Method_details','MM_LSD_description.pdf'),
             os.path.join(save_dir,team_name,f'{team_name}_{method}.pdf'))
 
+
+# =============================================================================
+# Oxford
+
+team_name = 'Oxford'
+method = 'DCPCA'
+makeTree(team_name,method,sub_folders=['Results','PlanetFit','PlanetFitPosteriors'])
+
+file_list = sorted(glob(os.path.join(box_dir,team_name,'*','*.csv')))
+for og_file in file_list:
+    if len(pd.read_csv(og_file))==0:
+        continue
+    
+    base_name = os.path.basename(og_file).replace('planetfit','planetFit').replace('oxford','Oxford')
+    file_type = base_name.split('_')[-1][:-4]
+    file = os.path.join(save_dir,team_name,method,file_type.capitalize(),base_name)
+    # Copy File Over
+    shutil.copy(og_file,file)
+
+# Add File Names to Results Tables
+file_list = glob(os.path.join(save_dir,team_name,'*','Results','*_results.csv'))
+for file in file_list:
+    addFileNames(file).to_csv(file,index=False)
+
+# Copy Auxiliary Files
+file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
+for og_file in file_list:
+    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
 
 # =============================================================================
 # WisconsinPennStateChicago
