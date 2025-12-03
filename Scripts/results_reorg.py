@@ -20,6 +20,7 @@ if os.path.isdir(save_dir):
 # Re-make Submissions Folder
 os.makedirs(save_dir)
 
+
 # =============================================================================
 # Scaffolding Functions
 
@@ -31,16 +32,22 @@ def makeTree(team_name,method_list,sub_folders=['Results']):
         for sub in sub_folders:
             os.makedirs(os.path.join(save_dir,team_name,method,sub))
 
-def addFileNames(results_file,t_tol=5/60/60/24): # 5 second tolerance in case BJD is used
+def addFileNames(results_file,t_tol=5/60/60/24):
+    # 5 second tolerance in case BJD is used
+    
     results_df = pd.read_csv(results_file)
     assert 'Standard File Name' not in results_df.columns
 
     ds = os.path.basename(results_file).split('_')[0]
     ts_df = pd.read_csv(os.path.join(essp_data_dir,'Training',ds,f'{ds}_timeSeries.csv'))
-    filed_df = pd.merge_asof(ts_df.loc[:,['Time [eMJD]','Standard File Name']],
+    ds_columns = ['Time [eMJD]','Standard File Name']
+    if 'Instrument' not in results_df.columns:
+        ds_columns.append('Instrument')
+    filed_df = pd.merge_asof(ts_df.loc[:,ds_columns],
                              results_df.sort_values(by='Time [eMJD]'), on='Time [eMJD]',
                              direction='nearest',tolerance=t_tol)
     return filed_df
+
 
 # =============================================================================
 # AustinGeneva
@@ -60,7 +67,10 @@ for og_file in file_list:
     shutil.copy(og_file,file)
 
     # Rename "Time (eMJD)" column to "Time [eMJD]"
-    pd.read_csv(file).rename(columns={'Time (eMJD)':'Time [eMJD]'}).to_csv(file,index=False)
+    df = pd.read_csv(file).rename(columns={'Time (eMJD)':'Time [eMJD]'})
+    # Remove "Ind.[U]" column, which is just the instrument
+    del df['Ind.[U]']
+    df.to_csv(file,index=False)
 
     # Add File Names to Results Table
     addFileNames(file).to_csv(file,index=False)
@@ -82,6 +92,7 @@ for ds in range(1,10):
 file_list = glob(os.path.join(box_dir,'AustinGeneva','*.*'))
 for og_file in file_list:
     shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+
 
 # =============================================================================
 # DTUPadovaPSU
@@ -140,56 +151,68 @@ for og_file in file_list:
     shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
 
 
-"""
-
-
-# =============================================================================
-# DTUPadovaPSU
-- reorganize into different methods including different method implementations
-  > start folders for
-    = emceeMultiple2actInd
-    = emceeMultiple4actInd
-    = emceeMultiple5actInd
-    = emceeMultiple2ccfInd
-    = same set of 4 for emceeSingle
-    = emceeMultiple2fiesta
-    = emceeMultiple3fiesta
-  > reorganize all files; there should be 27 files in each method specific folder
-- change file names
-  > DTU-Padova-PSU -> DTUPADOVAPSU
-  > you've renamed all of his methods
-- add file names to all results tables
-- remove empty files
-- check if the indicators in the actInd files are the values you gave or if he recalculated those values
-- move html files that show some comparisons
-
-results_emcee_multiple
-emcee_multiple_[2, 4, 5]_activity_indi_[hyperparameters, planetFit, results]
-emcee_multiple_ccfs_[hyperparameters, planetFit, results]
-
-results_emcee_multiple_fiesta
-emcee_multiple_[2, 3]modes_[hyperparameters, planetFit, results]
-
-results_emcee_single
-emcee_single_[2, 4, 5]_activity_indi_[hyperparameters, planetFit, results]
-emcee_single_ccfs_[hyperparameters, planetFit, results]
-
 # =============================================================================
 # TeamLSD
-- move details file to the main folder
-- rename to TeamLSD_MMLSD.pdf
-- rename planet fits from "DS#_TeamLSD_MMLSD+TWEAKS" to  "DS#_TeamLSD_MMLSD_planetFit"
-- rename planet fit posteriors from "DS#_posterior_sample" to "DS#_TeamLSD_MMLSD_planetFitPosteriors"
-- rename results from "ESSP_DS#_Combined" to "DS#_TeamLSD_MMLSD_results"
-- move all results, planet fits, and posteriors into an "MMLSD" folder
-- add file names to all the results tables
-- Should we be combining the U[0-4] for the different instruments?  (they don't look like the same scale tbh)
-  > maybe the detailed method questions will explain this?
 
+og_team_name = 'TeamLSD'
+team_name = 'LSD'
+method = 'MMLSD'
+# Make Necessary File Structure
+makeTree(team_name,method,sub_folders=['Results','PlanetFit','PlanetFitPosteriors'])
+
+for ds in range(1,10):
+    # Copy Over Planet Fit Files
+    shutil.copy(os.path.join(box_dir,og_team_name,'Planet_Parameters',
+                             f'DS{ds}_TeamLSD_MMLSD+TWEAKS.csv'),
+                os.path.join(save_dir,team_name,method,'PlanetFit',
+                             f'DS{ds}_{team_name}_{method}_planetFit.csv'))
+
+    # Copy Over Planet Posterior File Files as CSV
+    pos_file = os.path.join(box_dir,og_team_name,'Planet_fit_posteriors',
+                             f'DS{ds}_posterior_sample.txt')
+    new_pos_file = os.path.join(save_dir,team_name,method,'PlanetFitPosteriors',
+                             f'DS{ds}_{team_name}_{method}_planetFitPosteriors.txt')
+    pos_col_names = open(pos_file,'r').read().splitlines()[0][3:].split('   ')
+    pd.read_table(pos_file, sep=r'\s+', comment='#',
+                  names=pos_col_names).to_csv(new_pos_file,index=False)
+    
+    # Copy Over Results Files
+    file = os.path.join(save_dir,team_name,method,'Results',f'DS{ds}_{team_name}_{method}_results.csv')
+    shutil.copy(os.path.join(box_dir,og_team_name,'Results',f'ESSP_DS{ds}_Combined.csv'),file)
+    
+    # Rename "Time [MJD]" column to "Time [eMJD]"
+    df = pd.read_csv(file).rename(columns={'Time [MJD]':'Time [eMJD]'})
+    # Remove 'instrum' column
+    del df['instrum']
+    df.to_csv(file,index=False)
+    # Add File Names
+    addFileNames(file).to_csv(file,index=False)
+
+# Copy Auxiliary Files
+file_list = glob(os.path.join(box_dir,og_team_name,'*.*'))
+for og_file in file_list:
+    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+shutil.copy(os.path.join(box_dir,og_team_name,'Method_details','MM_LSD_description.pdf'),
+            os.path.join(save_dir,team_name,f'{team_name}_{method}.pdf'))
 
 
 # =============================================================================
 # WisconsinPennStateChicago
-- add "DS to the front of all results files
-- organize the three variants (baseline, gauss, gaussPlusPCA) into three different folders
-"""
+
+team_name = 'WisconsinPennStateChicago'
+method_list = ['baseline', 'gauss', 'gaussPlusPCA']
+# Make Necessary File Structure
+makeTree(team_name,method_list)
+
+file_list = sorted(glob(os.path.join(box_dir,team_name,'[1-9]_*.csv')))
+for og_file in file_list:
+    base_name = os.path.basename(og_file)
+    method = base_name.split('_')[-2]
+
+    file = os.path.join(save_dir,team_name,method,'Results',f'DS{base_name}')
+    shutil.copy(og_file,file)
+
+# Copy Auxiliary Files
+file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
+for og_file in file_list:
+    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
