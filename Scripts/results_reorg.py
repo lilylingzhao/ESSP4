@@ -162,10 +162,13 @@ makeTree(team_name,method,sub_folders=['Results','PlanetFit','PlanetFitPosterior
 
 for ds in range(1,10):
     # Copy Over Planet Fit Files
-    shutil.copy(os.path.join(box_dir,og_team_name,'Planet_Parameters',
-                             f'DS{ds}_TeamLSD_MMLSD+TWEAKS.csv'),
-                os.path.join(save_dir,team_name,method,'PlanetFit',
-                             f'DS{ds}_{team_name}_{method}_planetFit.csv'))
+    fit_file = os.path.join(box_dir,og_team_name,'Planet_Parameters',
+                            f'DS{ds}_TeamLSD_MMLSD+TWEAKS.csv')
+    if type(pd.read_csv(fit_file)['K [m/s]'].to_list()[0])!=float:
+        # When there is a fit the type is string
+        shutil.copy(fit_file,
+                    os.path.join(save_dir,team_name,method,'PlanetFit',
+                                 f'DS{ds}_{team_name}_{method}_planetFit.csv'))
 
     # Copy Over Planet Posterior File Files as CSV
     pos_file = os.path.join(box_dir,og_team_name,'Planet_fit_posteriors',
