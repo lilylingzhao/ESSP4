@@ -171,10 +171,23 @@ for ds in range(1,10):
     fit_file = os.path.join(box_dir,og_team_name,'Planet_Parameters',
                             f'DS{ds}_TeamLSD_MMLSD+TWEAKS.csv')
     if type(pd.read_csv(fit_file)['K [m/s]'].to_list()[0])!=float:
-        # When there is a fit the type is string
-        shutil.copy(fit_file,
-                    os.path.join(save_dir,team_name,method,'PlanetFit',
-                                 f'DS{ds}_{team_name}_{method}_planetFit.csv'))
+        # When there exists a fit the type is string
+
+        # Rewrite error to separate column
+        df = pd.read_csv(fit_file)
+        for col in df.columns:
+            for i in df.index:
+                val = df[col][i]
+                if type(val)==str and '±' in val:
+                    val, err = val.split('±')
+                    df.at[i,col] = float(val.strip())
+                    if 'e'+col not in df.columns:
+                        df.insert(df.columns.get_loc(col)+1,'e'+col,np.nan)
+                    df.at[i,'e'+col] = float(err.strip())
+        # There's still going to be some "N to N" entries
+        planet_fit_file = os.path.join(save_dir,team_name,method,'PlanetFit',
+                                 f'DS{ds}_{team_name}_{method}_planetFit.csv')
+        df.to_csv(planet_fit_file,index=False)
 
     # Copy Over Planet Posterior File Files as CSV
     pos_file = os.path.join(box_dir,og_team_name,'Planet_fit_posteriors',
