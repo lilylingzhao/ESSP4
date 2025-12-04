@@ -247,6 +247,40 @@ for og_file in file_list:
     shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
 
 # =============================================================================
+# Sidera
+
+team_name = 'Sidera'
+method_list = ['FDACmean','FDACmeanXDM']
+makeTree(team_name,method_list)
+
+for ds in range(1,10):
+    for method in method_list:
+        og_file = os.path.join(box_dir,team_name,f'DS{ds}',f'DS{ds}_{team_name}_{method}_results.csv')
+        og_file = og_file.replace('XDM','+XDM')
+        file = os.path.join(save_dir,team_name,method,'Results',f'DS{ds}_{team_name}_{method}_results.csv')
+        shutil.copy(og_file,file)
+
+        # Rename "Time [MJD]" to "Time [eMJD]"
+        df = pd.read_csv(file,index_col=0).rename(columns={'Time [MJD]':'Time [eMJD]'})
+        
+        df.to_csv(file,index=False)
+    
+        # Add File Names to Results Table
+        addFileNames(file).to_csv(file,index=False)
+
+# Save Trend Files
+trend_dir = os.path.join(save_dir,team_name,'Trends')
+os.makedirs(trend_dir)
+file_list = glob(os.path.join(box_dir,team_name,'DS[1-9]','DS[1-9]_trends.csv'))
+for trend_file in file_list:
+    shutil.copy(trend_file,os.path.join(trend_dir,os.path.basename(trend_file)))
+
+# Copy Auxiliary Files
+file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
+for og_file in file_list:
+    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+
+# =============================================================================
 # WisconsinPennStateChicago
 
 team_name = 'WisconsinPennStateChicago'
