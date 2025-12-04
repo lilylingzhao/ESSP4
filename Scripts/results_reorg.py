@@ -269,11 +269,9 @@ for ds in range(1,10):
         addFileNames(file).to_csv(file,index=False)
 
 # Save Trend Files
-trend_dir = os.path.join(save_dir,team_name,'Trends')
-os.makedirs(trend_dir)
 file_list = glob(os.path.join(box_dir,team_name,'DS[1-9]','DS[1-9]_trends.csv'))
 for trend_file in file_list:
-    shutil.copy(trend_file,os.path.join(trend_dir,os.path.basename(trend_file)))
+    shutil.copy(trend_file,os.path.join(save_dir,team_name,os.path.basename(trend_file)))
 
 # Copy Auxiliary Files
 file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
