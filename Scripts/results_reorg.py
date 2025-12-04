@@ -8,7 +8,8 @@ import pandas as pd
 from tqdm import tqdm
 
 # Replace with local pointing to box download
-essp_data_dir = '/Volumes/Hasbrouck/ceph/ESSP_Solar/4_DataSets'
+#essp_data_dir = '/Volumes/Hasbrouck/ceph/ESSP_Solar/4_DataSets'
+essp_data_dir = '/Users/lilyzhao/Documents/ceph/ESSP_Solar/ESSP4/Data'
 box_dir = '/Users/lilyzhao/Documents/ceph/ESSP_Solar/ESSP4/Box/Submissions'
 
 save_dir = '/Users/lilyzhao/Documents/ceph/ESSP_Solar/ESSP4/Submissions'
@@ -52,6 +53,7 @@ def addFileNames(results_file,t_tol=5/60/60/24):
 # =============================================================================
 # AustinGeneva
 
+og_team_name = 'Austin_Geneva'
 team_name = 'AustinGeneva'
 method = 'CNNFitter'
 # Make Necessary File Structure
@@ -62,7 +64,7 @@ file_list = glob(os.path.join(box_dir,'AustinGeneva','DS*','*_results.csv'))
 for og_file in file_list:
     # Replace "Austin_Geneva" with "AustinGeneva"
     # Replace "CNN_Filter" with "CNNFilter"
-    file_baseName = os.path.basename(og_file).replace("Austin_Geneva","AustinGeneva").replace("CNN_Fitter","CNNFitter")
+    file_baseName = os.path.basename(og_file).replace(og_team_name,team_name).replace("CNN_Fitter","CNNFitter")
     file = os.path.join(save_dir,team_name,method,'Results',file_baseName)
     shutil.copy(og_file,file)
 
@@ -91,7 +93,11 @@ for ds in range(1,10):
 # Copy Auxiliary Files
 file_list = glob(os.path.join(box_dir,'AustinGeneva','*.*'))
 for og_file in file_list:
-    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+    if 'members' in og_file:
+        new_base_file = f'{team_name}_members.csv'
+    else:
+        new_base_file = os.path.basename(og_file).replace(og_team_name,team_name).replace("CNN_Filter","CNNFitter")
+    shutil.copy(og_file,os.path.join(save_dir,team_name,new_base_file))
 
 
 # =============================================================================
@@ -126,13 +132,13 @@ for og_file in file_list:
     # Get the Type of Result
     file_type = name_parts[-1][:-4]
     # Assemble into new directory and file name
-    file = os.path.join(save_dir,team_name,method_name,file_type.capitalize(),
+    file = os.path.join(save_dir,team_name,method_name,file_type,
                         f'{name_parts[0]}_{team_name}_{method_name}_{file_type}.csv')
     # Copy File Over
     shutil.copy(og_file,file)
 
 # Add File Names to Results Tables
-file_list = glob(os.path.join(save_dir,team_name,'*','Results','*_results.csv'))
+file_list = glob(os.path.join(save_dir,team_name,'*','results','*_results.csv'))
 for file in file_list:
     addFileNames(file).to_csv(file,index=False)
 
@@ -140,7 +146,7 @@ for file in file_list:
 file_list = sorted(glob(os.path.join(box_dir,og_team_name,'*','*.html')))
 for og_file in file_list:
     dir_name, base_name = og_file.split('/')[-2:]
-    dir_name = dir_name.split('_')[-1].capitalize()
+    dir_name = dir_name.split('_')[-1]
     file = f'emcee{dir_name}Comparison_{base_name[17:]}'
     # Copy File Over
     shutil.copy(og_file,os.path.join(save_dir,team_name,file))
@@ -148,7 +154,7 @@ for og_file in file_list:
 # Copy Auxiliary Files
 file_list = glob(os.path.join(box_dir,og_team_name,'*.*'))
 for og_file in file_list:
-    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)).replace(og_team_name,team_name))
 
 
 # =============================================================================
@@ -158,7 +164,7 @@ og_team_name = 'TeamLSD'
 team_name = 'LSD'
 method = 'MMLSD'
 # Make Necessary File Structure
-makeTree(team_name,method,sub_folders=['Results','PlanetFit','PlanetFitPosteriors'])
+makeTree(team_name,method,sub_folders=['results','planetFit','planetFitPosteriors'])
 
 for ds in range(1,10):
     # Copy Over Planet Fit Files
@@ -174,14 +180,14 @@ for ds in range(1,10):
     pos_file = os.path.join(box_dir,og_team_name,'Planet_fit_posteriors',
                              f'DS{ds}_posterior_sample.txt')
     new_pos_file = os.path.join(save_dir,team_name,method,'PlanetFitPosteriors',
-                             f'DS{ds}_{team_name}_{method}_planetFitPosteriors.txt')
+                             f'DS{ds}_{team_name}_{method}_planetFitPosteriors.csv')
     pos_col_names = open(pos_file,'r').read().splitlines()[0][3:].split('   ')
     pd.read_table(pos_file, sep=r'\s+', comment='#',
                   names=pos_col_names).to_csv(new_pos_file,index=False)
     
     # Copy Over Results Files
     file = os.path.join(save_dir,team_name,method,'Results',f'DS{ds}_{team_name}_{method}_results.csv')
-    shutil.copy(os.path.join(box_dir,og_team_name,'Results',f'ESSP_DS{ds}_Combined.csv'),file)
+    shutil.copy(os.path.join(box_dir,og_team_name,'results',f'ESSP_DS{ds}_Combined.csv'),file)
     
     # Rename "Time [MJD]" column to "Time [eMJD]"
     df = pd.read_csv(file).rename(columns={'Time [MJD]':'Time [eMJD]'})
@@ -194,7 +200,7 @@ for ds in range(1,10):
 # Copy Auxiliary Files
 file_list = glob(os.path.join(box_dir,og_team_name,'*.*'))
 for og_file in file_list:
-    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)).replace(og_team_name,team_name))
 shutil.copy(os.path.join(box_dir,og_team_name,'Method_details','MM_LSD_description.pdf'),
             os.path.join(save_dir,team_name,f'{team_name}_{method}.pdf'))
 
@@ -204,7 +210,7 @@ shutil.copy(os.path.join(box_dir,og_team_name,'Method_details','MM_LSD_descripti
 
 team_name = 'Oxford'
 method = 'DCPCA'
-makeTree(team_name,method,sub_folders=['Results','PlanetFit','PlanetFitPosteriors'])
+makeTree(team_name,method,sub_folders=['results','planetFit','planetFitPosteriors'])
 
 file_list = sorted(glob(os.path.join(box_dir,team_name,'*','*.csv')))
 for og_file in file_list:
@@ -213,12 +219,12 @@ for og_file in file_list:
     
     base_name = os.path.basename(og_file).replace('planetfit','planetFit').replace('oxford','Oxford')
     file_type = base_name.split('_')[-1][:-4]
-    file = os.path.join(save_dir,team_name,method,file_type.capitalize(),base_name)
+    file = os.path.join(save_dir,team_name,method,file_type,base_name)
     # Copy File Over
     shutil.copy(og_file,file)
 
 # Add File Names to Results Tables
-file_list = glob(os.path.join(save_dir,team_name,'*','Results','*_results.csv'))
+file_list = glob(os.path.join(save_dir,team_name,'*','results','*_results.csv'))
 for file in file_list:
     addFileNames(file).to_csv(file,index=False)
 
@@ -240,7 +246,7 @@ for og_file in file_list:
     base_name = os.path.basename(og_file)
     method = base_name.split('_')[-2]
 
-    file = os.path.join(save_dir,team_name,method,'Results',f'DS{base_name}')
+    file = os.path.join(save_dir,team_name,method,'results',f'DS{base_name}')
     shutil.copy(og_file,file)
 
 # Copy Auxiliary Files
