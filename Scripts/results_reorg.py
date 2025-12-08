@@ -26,7 +26,7 @@ os.makedirs(save_dir)
 # Scaffolding Functions
 
 # Make team folder and method sub-folders
-def makeTree(team_name,method_list,sub_folders=['Results']):
+def makeTree(team_name,method_list,sub_folders=['results']):
     if type(method_list)==str:
         method_list = [method_list]
     for method in method_list:
@@ -57,7 +57,7 @@ og_team_name = 'Austin_Geneva'
 team_name = 'AustinGeneva'
 method = 'CNNFitter'
 # Make Necessary File Structure
-makeTree(team_name,method,sub_folders=['Results','PlanetFit'])
+makeTree(team_name,method,sub_folders=['results','planetFit'])
 
 # Move files from individual DS folders to CNN folder
 file_list = glob(os.path.join(box_dir,'AustinGeneva','DS*','*_results.csv'))
@@ -65,7 +65,7 @@ for og_file in file_list:
     # Replace "Austin_Geneva" with "AustinGeneva"
     # Replace "CNN_Filter" with "CNNFilter"
     file_baseName = os.path.basename(og_file).replace(og_team_name,team_name).replace("CNN_Fitter","CNNFitter")
-    file = os.path.join(save_dir,team_name,method,'Results',file_baseName)
+    file = os.path.join(save_dir,team_name,method,'results',file_baseName)
     shutil.copy(og_file,file)
 
     # Rename "Time (eMJD)" column to "Time [eMJD]"
@@ -86,7 +86,7 @@ for ds in range(1,10):
     planet_df['e'] = 0
     planet_df['w [deg]'] = 0
 
-    save_file = os.path.join(save_dir,team_name,method,'PlanetFit',
+    save_file = os.path.join(save_dir,team_name,method,'planetFit',
                              f'DS{ds}_{team_name}_{method}_planetFit.csv')
     planet_df.to_csv(save_file,index=False)
 
@@ -114,7 +114,7 @@ for mc in ['Single','Multiple']:
 for fiesta_num in [2,3]:
     method_dict[f'emcee_multiple_{fiesta_num}modes'] = f'emceeMultiple{fiesta_num}fiesta'
 # Make Necessary File Structure
-makeTree(team_name,list(method_dict.values()),sub_folders=['Results','PlanetFit','Hyperparameters'])
+makeTree(team_name,list(method_dict.values()),sub_folders=['results','planetFit','hyperparameters'])
 
 # Move files:
 #     0) don't bother if file is empty
@@ -158,6 +158,32 @@ for og_file in file_list:
 
 
 # =============================================================================
+# GrazIWF
+
+team_name = 'GrazIWF'
+method = 'breakpoint'
+# Make Necessary File Structure
+makeTree(team_name,method,sub_folders=['results','planetFit','planetFitPosteriors'])
+
+file_list = sorted(glob(os.path.join(box_dir,team_name,'RESULTS','DS[1-9]_*.csv')))
+for og_file in file_list:
+    base_name = os.path.basename(og_file)
+    file_type = base_name.split('_')[-1][:-4]
+    file = os.path.join(save_dir,team_name,method,file_type,base_name.replace('Breakpoint','breakpoint'))
+
+    # Remove the '#' from the beginning of each file
+    # (in absolutely the dumbest way imaginable)
+    df = pd.read_csv(og_file)
+    col = df.columns
+    df.rename(columns={col[0]:col[0][1:]}).to_csv(file,index=False)
+
+# Copy Auxiliary Files
+file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
+for og_file in file_list:
+    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+
+
+# =============================================================================
 # LSD
 
 og_team_name = 'TeamLSD'
@@ -185,14 +211,14 @@ for ds in range(1,10):
                         df.insert(df.columns.get_loc(col)+1,'e'+col,np.nan)
                     df.at[i,'e'+col] = float(err.strip())
         # There's still going to be some "N to N" entries
-        planet_fit_file = os.path.join(save_dir,team_name,method,'PlanetFit',
+        planet_fit_file = os.path.join(save_dir,team_name,method,'planetFit',
                                  f'DS{ds}_{team_name}_{method}_planetFit.csv')
         df.to_csv(planet_fit_file,index=False)
 
     # Copy Over Planet Posterior File Files as CSV
     pos_file = os.path.join(box_dir,og_team_name,'Planet_fit_posteriors',
                              f'DS{ds}_posterior_sample.txt')
-    new_pos_file = os.path.join(save_dir,team_name,method,'PlanetFitPosteriors',
+    new_pos_file = os.path.join(save_dir,team_name,method,'planetFitPosteriors',
                              f'DS{ds}_{team_name}_{method}_planetFitPosteriors.csv')
     pos_col_names = open(pos_file,'r').read().splitlines()[0][3:].split('   ')
     pd.read_table(pos_file, sep=r'\s+', comment='#',
@@ -257,7 +283,7 @@ for ds in range(1,10):
     for method in method_list:
         og_file = os.path.join(box_dir,team_name,f'DS{ds}',f'DS{ds}_{team_name}_{method}_results.csv')
         og_file = og_file.replace('XDM','+XDM')
-        file = os.path.join(save_dir,team_name,method,'Results',f'DS{ds}_{team_name}_{method}_results.csv')
+        file = os.path.join(save_dir,team_name,method,'results',f'DS{ds}_{team_name}_{method}_results.csv')
         shutil.copy(og_file,file)
 
         # Rename "Time [MJD]" to "Time [eMJD]"
