@@ -178,7 +178,8 @@ for og_file in file_list:
     df.rename(columns={col[0]:col[0][1:]}).to_csv(file,index=False)
 
 # Copy Auxiliary Files
-file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
+file_list = [*glob(os.path.join(box_dir,team_name,'RESULTS',f'{team_name}*')),
+             *glob(os.path.join(box_dir,team_name,f'{team_name}*'))]
 for og_file in file_list:
     shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
 
