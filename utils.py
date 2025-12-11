@@ -2,6 +2,7 @@
 #     to the top of every notebook
 
 import os
+from glob import glob
 import numpy as np
 from astropy.time import Time
 import pandas as pd
@@ -13,6 +14,8 @@ solar_dir = os.path.join(ceph_dir,'ESSP_Solar',)
 mask_dir = os.path.join(ceph_dir,'CCF_Masks','ESPRESSO')
 essp_dir = os.path.join(solar_dir,'ESSP4','Data','Training')
 essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
+
+subm_dir = os.path.join(solar_dir,'ESSP4','Submissions')
 
 # Default CCF Mask
 default_mask_file = os.path.join(mask_dir,'NEID_G2_telluricAdjusted.fits')
@@ -173,3 +176,13 @@ def padOrders(og_arr,inst):
 def unpadOrders(og_arr):
     isord = np.sum(np.isfinite(og_arr),axis=1)>0
     return og_arr[isord]
+
+# =============================================================================
+# Standardizing Relative/Echelle Order
+
+def getSubmission(team_name,method,ds_num,sub_type='results'):
+    return pd.read_csv(os.path.join(subm_dir,team_name,method,sub_type,
+                                    f'DS{ds_num}_{team_name}_{method}_{sub_type}.csv'))
+
+def getTeamMethods(team_name):
+    return [i.split('/')[-2] for i in sorted(glob(os.path.join(subm_dir,team_name,'*','')))]
