@@ -175,7 +175,10 @@ for og_file in file_list:
     # (in absolutely the dumbest way imaginable)
     df = pd.read_csv(og_file)
     col = df.columns
-    df.rename(columns={col[0]:col[0][1:]}).to_csv(file,index=False)
+    df = df.rename(columns={col[0]:col[0][1:]})
+    # Add Instrument column
+    df['Instrument'] = [f.split('_')[-1].split('.')[0] for f in df['Standard File Name']]
+    df.to_csv(file,index=False)
 
 # Copy Auxiliary Files
 file_list = [*glob(os.path.join(box_dir,team_name,'RESULTS',f'{team_name}*')),
