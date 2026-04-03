@@ -17,9 +17,14 @@ essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
 
 subm_dir = os.path.join(solar_dir,'ESSP4','Submissions')
 
+num_dset = 9
+
 # Default CCF Mask
 default_mask_file = os.path.join(mask_dir,'NEID_G2_telluricAdjusted.fits')
 #default_mask_file = os.path.join(mask_dir,'ESPRESSO_G2.fits')
+
+# One Fit GP Model
+oneFit_file = os.path.join(solar_dir,'250109_oneFitModel.csv')
 
 # =============================================================================
 # Useful Variables
@@ -72,6 +77,21 @@ iccf_offset = {
 
 pd.DataFrame.from_dict(iccf_offset,orient='index',columns=['offset']).to_csv(
     os.path.join(solar_dir,'instrument_offsets_iccf.csv'),header=False)
+
+# =============================================================================
+# Submission Information
+
+results_dirs = glob(os.path.join(subm_dir,'*','*','results','DS1_*_results.csv'))
+meth2team_dict = dict(zip([d.split('/')[-3] for d in results_dirs],
+                          [d.split('/')[-4] for d in results_dirs]))
+meth_list = sorted(list(meth2team_dict.keys()))
+team_list = sorted(np.unique(list(meth2team_dict.values())))
+num_meth, num_team = len(meth_list), len(team_list)
+
+def getSubmittedRVs(method,dset):
+    team = meth2team_dict[method]
+    results_dir = os.path.join(subm_dir,team,method,'results')
+    return pd.read_csv(os.path.join(results_dir,f'DS{dset}_{team}_{method}_results.csv'))
 
 # =============================================================================
 # Instrument/File Names

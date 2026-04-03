@@ -1,26 +1,347 @@
+# Process SDO Observations
+
 import os
 from glob import glob
 import numpy as np
 from astropy.io import fits
 from astropy.time import Time
+import astropy.units as u
 from scipy import ndimage
 from skimage.draw import ellipse as circle
 import pandas as pd
 from tqdm import tqdm
 
+import sunpy.map
+from sunpy.net import Fido
+from sunpy.net import attrs as a
+from sunpy.coordinates import frames
 
-
-import matplotlib.pyplot as     plt
-
-import pandas            as     pd
-import pickle
-from   scipy             import ndimage
-from   skimage.draw      import ellipse as circle
-from   tqdm              import tqdm
-
+import SolAster.tools.rvs               as     rvs
+import SolAster.tools.calculation_funcs as     sfuncs
+import SolAster.tools.lbc_funcs         as     lbfuncs
+import SolAster.tools.coord_funcs       as     ctfuncs
+import SolAster.tools.utilities         as     utils
+from   SolAster.tools.settings          import *
+from   SolAster.tools.plotting_funcs    import hmi_plot
 
 # =============================================================================
-# Coordniate Functions
+# Managing SDO Files
+
+sdo_file_types = {'dopplergram':'hmi.v_720s',  # Velocity map
+                  'magnetogram':'hmi.m_720s',  # Magnetic field map
+                  'continuum'  :'hmi.IC_720s'} # Continuum intensity
+
+def getSdoFileName(yyyymmdd,tstamp,file_type):
+    # Format information into SDO file name convention
+    file_type = file_type.lower()
+    file_name = sdo_file_types[file_type.lower()].lower()
+    file_name += f'.{yyyymmdd}_{tstamp}_TAI.3.'
+    file_name += file_type.capitalize() if file_type=='dopplergram' else file_type
+    file_name += '.fits'
+    return file_name
+
+def downloadDay(day,save_dir,
+                cadence=12*u.minute,
+                e_mail='lilylingzhao@uchicago.edu'):
+    day_mjd = Time(day,format='isot').mjd if '-' in day else int(day)
+    dmin, dmax = Time([day_mjd+7/24, day_mjd+25/24],format='mjd').isot
+
+    for key in sdo_file_types.keys():
+        matching_images = Fido.search(
+            a.Time(dmin,dmax),        # time range in which to search for data
+            a.jsoc.Series(sdo_file_types[key]), # list of data products to access
+            a.Sample(cadence),        # cadence
+            a.jsoc.Notify(e_mail)     # specify uset
+        )
+        
+        downloaded_files = Fido.fetch(matching_images,
+                                      path=os.path.join(save_dir,key,'{file}'))
+        failed_files = downloaded_files.errors
+        counter = 0
+        while len(failed_files)>0:
+            downloaded_files = Fido.fetch(downloaded_files)
+            failed_files = downloaded_files.errors
+            counter += 1
+        print(f'{day}, {key} Redos: {counter}')
+
+def deleteDay(yyyymmdd,save_dir):
+    file_list = glob(save_dir,'*',f'hmi*_720s.{yyyymmdd}_*.fits')
+    for f in tqdm(file_list,desc=f'Removing {yyyymmdd} Files'):
+        os.remove(f)
+
+# =============================================================================
+# SolAster Functionality
+
+class SDO(object):
+    """
+    """
+    @staticmethod
+    def coordinateTransformSDO(sdo_map):
+        return mu, wij, nij, rij
+    
+    def __init__(self, date, tstamp, save_dir):
+        # Assemble Relvant SDO Files
+        file_list = [os.path.join(save_dir,key.capitalize(),
+                                  getSdoFileName(date,tstamp,key)) \
+                     for key in sdo_file_types.keys()]
+        map_seq = sunpy.map.Map(file_list)
+        # split into data types
+        vmap, mmap, imap = None, None, None
+        for j, map_obj in enumerate(map_seq):
+            if map_obj.meta['content'] == 'DOPPLERGRAM':
+                vmap = map_obj
+            elif map_obj.meta['content'] == 'MAGNETOGRAM':
+                mmap = map_obj
+            elif map_obj.meta['content'] == 'CONTINUUM INTENSITY':
+                imap = map_obj
+            else:
+                assert False, print('File list includes map of unexpected content')
+    
+        # Make sure we have all the map types
+        assert vmap is not None, "No dopplergram file"
+        assert mmap is not None, "No magnetogram file
+        assert imap is not None, "No continuum intensity file"
+
+        # Coordinate Transform for Maps
+        # https://tamarervin.github.io/SolAster/calcs/coords/
+        self.x, self.y, self.pdim, self.r, self.d, self.mu = ctfuncs.coordinates(vmap)
+        self.wij, self.nij, self.rij = ctfuncs.vel_coords(self.x, self.y,
+                                                          self.pdim, self.r, vmap)
+        
+        # remove bad mu values (i.e. <0.1) mostly about the edge
+        self.vmap, self.mmap, self.imap = ctfuncs.fix_mu(self.mu, [vmap, mmap, imap])
+
+# =====================================
+# Collect and Assemble Relevant Files
+
+
+
+def assembleSdoImages(date,tstamp,save_dir):
+    file_list = [os.path.join(save_dir,key.capitalize(),
+                              getSdoFileName(date,tstamp,key)) \
+                 for key in sdo_file_types.keys()]
+    map_seq = sunpy.map.Map(file_list)
+    # split into data types
+    vmap, mmap, imap = None, None, None
+    for j, map_obj in enumerate(map_seq):
+        if map_obj.meta['content'] == 'DOPPLERGRAM':
+            vmap = map_obj
+        elif map_obj.meta['content'] == 'MAGNETOGRAM':
+            mmap = map_obj
+        elif map_obj.meta['content'] == 'CONTINUUM INTENSITY':
+            imap = map_obj
+        else:
+            assert False, print('File list includes map of unexpected content')
+
+    # Make sure we have all the map types
+    assert vmap is not None, "No dopplergram file"
+    assert mmap is not None, "No magnetogram file
+    assert imap is not None, "No continuum intensity file"
+    
+    # remove bad mu values (i.e. <0.1) mostly about the edge
+    mu = coordinateTransformSDO(vmap)[0]
+    vmap, mmap, imap = ctfuncs.fix_mu(mu, [vmap, mmap, imap])
+    return vmap, mmap, imap
+
+# =====================================
+# Various Corrections
+
+def correctVelocity(sdo_vmap):
+    ### remove spacecraft velocity and solar rotational velocity
+
+    # Coordinate Transform
+    mu, wij, nij, rij = coordinateTransformSDO(sdo_vmap)
+    
+    # calculate relative positions
+    deltaw, deltan, deltar, dij = sfuncs.rel_positions(wij, nij, rij, sdo_vmap)
+
+    # calculate spacecraft velocity
+    vsc = sfuncs.spacecraft_vel(deltaw, deltan, deltar, dij, sdo_vmap)
+
+    # optimized solar rotation parameters
+    a_parameters = [Parameters.a1, Parameters.a2, Parameters.a3]
+
+    # calculation of solar rotation velocity
+    vrot = sfuncs.solar_rot_vel(wij, nij, rij,
+                                deltaw, deltan, deltar, dij,
+                                sdo_vmap, a_parameters)
+
+    # calculate corrected velocity
+    corrected_vel = sdo_vmap.data - np.real(vsc) - np.real(vrot)
+
+    # corrected velocity maps
+    vmap_cor = sfuncs.corrected_map(corrected_vel, sdo_vmap,
+                                    map_type='Corrected-Dopplergram',
+                                    frame=frames.HeliographicCarrington)
+    return vrot, vmap_cor
+
+def correctLimbDarkening(sdo_imap):
+    # remove limb darkening map that's loaded into SolAster
+    # (map uses parameterization in Allen 1973)
+    
+    # limb brightening
+    Lij = lbfuncs.limb_polynomial(sdo_imap)
+    
+    # calculate corrected data
+    Iflat = sdo_imap.data / Lij
+    
+    # corrected intensity maps
+    imap_cor = sfuncs.corrected_map(Iflat, sdo_imap,
+                                    map_type='Corrected-Intensitygram',
+                                    frame=frames.HeliographicCarrington)
+    return imap_cor
+
+def correctMagneticForeshortening(sdo_mmap):
+    # Correct using the unsigned magnetic field strength and magnetic noise
+    mu = coordinateTransformSDO(sdo_mmap)[0]
+
+    # calculate unsigned field strength
+    Bobs, Br = sfuncs.mag_field(mu, sdo_mmap,
+                                B_noise=Parameters.B_noise,
+                                mu_cutoff=Parameters.mu_cutoff)
+
+    # corrected observed magnetic data map
+    mmap_obs = sfuncs.corrected_map(Bobs, sdo_mmap,
+                                    map_type='Corrected-Magnetogram',
+                                    frame=frames.HeliographicCarrington)
+
+    # radial magnetic data map
+    mmap_cor = sfuncs.corrected_map(Br, sdo_mmap,
+                                    map_type='Corrected-Magnetogram',
+                                    frame=frames.HeliographicCarrington)
+    return mmap_obs, mmap_cor
+
+# =====================================
+# Process Images
+
+def getActiveRegions(sdo_mmap, sdo_imap_cor):
+    
+    mu = coordinateTransformSDO(sdo_mmap)[0]
+    # calculate magnetic threshold
+    active, quiet = sfuncs.mag_thresh(mu, sdo_mmap,
+                                      Br_cutoff=Parameters.Br_cutoff,
+                                      mu_cutoff=Parameters.mu_cutoff)
+    
+    # calculate intensity threshold
+    fac_inds, spot_inds = sfuncs.int_thresh(sdo_imap_cor, active, quiet)
+
+    ### These Threshold Values Aren't Used?
+    """
+    # create threshold array
+    threshold_arr = sfuncs.thresh_map(fac_inds, spot_inds)
+    # full threshold maps
+    threshold_map = sfuncs.corrected_map(threshold_arr, sdo_mmap,
+                                         map_type='Threshold',
+                                         frame=frames.HeliographicCarrington)
+    """
+    actv_dict = {'active':active,'quiet':quiet,
+                 'fac_inds':fac_inds,'spot_inds':spot_inds}
+    return actv_dict
+
+def getFillingFactors(actv_dict,sdo_mmap,sdo_vmap):
+    mu, wij, nij, rij = coordinateTransformSDO(sdo_vmap)
+    
+    # filling factor
+    actv_keys = ['active','fac_inds','spot_inds']
+    filling_factors = sfuncs.filling_factor(mu, sdo_mmap, 
+                                            **{k:actv_dict[k] for k in actv_keys},
+                                            mu_cutoff=Parameters.mu_cutoff)
+    filling_dict = dict(zip(['f_bright','f_spot','f'],fills))
+
+    # calculate the area filling factor
+    pixA_hem = ctfuncs.pix_area_hem(wij, nij, rij, sdo_vmap)
+    area = sfuncs.area_calc(actv_dict['active'], pixA_hem)
+    area_filling_factors = sfuncs.area_filling_factor(actv_dict['active'],
+                                                      area, mu, sdo_mmap,
+                                                      actv_dict['fac_inds'],
+                                                      athresh=Parameters.athresh,
+                                                      mu_cutoff=Parameters.mu_cutoff)
+    filling_dict |= dict(zip(['f_small','f_large','f_network','f_plage'],
+                             area_filling_factors))
+    
+    return area, filling_dict
+
+def getMagneticFlux(actv_dict,sdo_mmap_obs,sdo_imap,area)
+    # unsigned magnetic flux
+    # unsigned observed flux
+    unsigned_obs_flux = sfuncs.unsigned_flux(sdo_mmap_obs, sdo_imap)
+    flux_dict = {'Bobs':unsigned_obs_flux}
+
+    # get the unsigned flux
+    fluxes = sfuncs.area_unsigned_flux(sdo_mmap_obs, sdo_imap,
+                                       area, actv_dict['active'],
+                                       athresh=Parameters.athresh)
+    flux_types = ['quiet_flux', 'ar_flux', 'conv_flux',
+                  'pol_flux', 'pol_conv_flux']
+    flux_dict |= dict(zip(flux_types,fluxes))
+
+    return flux_dict
+
+def getVelocities(actv_dict,sdo_vmap_cor,sdo_imap,vrot,area):
+    # I don't love that I need to read in vrot and area here...
+    
+    # velocity contribution due to convective motion of quiet-Sun
+    v_quiet = sfuncs.v_quiet(sdo_vmap_corr, sdo_imap, actv_dict['quiet'])
+
+    # velocity contribution due to rotational Doppler imbalance of active regions (faculae/sunspots)
+    # calculate photospheric velocity
+    mu = coordinateTransformSDO(sdo_imap)[0]
+    Lij = lbfuncs.limb_polynomial(sdo_imap)
+    vphots = sfuncs.v_phot(**actv_dict,
+                           Lij=Lij, vrot=vrot,
+                           imap=sdo_imap, mu=mu,
+                           mu_cutoff=Parameters.mu_cutoff)
+    velocity_dict = dict(zip(['v_phot','v_phot_bright','v_phot_spot'],
+                             vphots))
+
+    # velocity contribution due to suppression of convective blueshift by active regions
+    # calculate disc-averaged velocity
+    velocity_dict['v_disc'] = sfuncs.v_disc(sdo_vamp_cor, sdo_imap)
+
+    # calculate convective velocity
+    velocity_dict['v_conv'] = v_disc - v_quiet
+
+    # get area weighted convective velocities
+    vconvs = sfuncs.area_vconv(sdo_vmap_cor, sdo_imap,
+                               actv_dict['active'], area,
+                               athresh=Parameters.athresh)
+    velocity_dict |= dict(zip(['v_conv_quiet','v_conv_large','v_conv_small'],
+                              vconvs))
+    
+    # calculate model RV
+    rv_model = rvs.calc_model(inst, v_conv, v_phot)
+
+    return rv_model, velocity_dict
+
+def getAllSolAsterValues(date,tstamp,save_dir):
+    ### Read in Relevant Data
+    vmap, mmap, imap = assembleSdoImages(date,tstamp,save_dir)
+    
+    ### Make Corrections
+    # Remove spacecraft velocity and solar rotational velocity
+    vrot, vmap_cor = correctVelocity(vmap)
+    # Remove ALlen 1973 limb darkening map
+    imap_cor = correctLimbDarkening(imap)
+    # Get corrected observed magnetic map and radial magnetic map
+    mmap_obs, mmap_cor = correctMagneticForeshortening(mmap)
+    
+    ### Calculate Values
+    # Separate Out Active Regions
+    actv_dict = getActiveRegions(mmap, sdo_imap_cor)
+    # Optional Diagnostic Plot
+    #hmi_plot(imap_cor, mmap_obs, vmap_cor, fac_inds, spot_inds, mu, save_fig='')
+    # Get Filling Factors
+    area, fill_dict = getFillingFactors(actv_dict, mmap, vmap)
+    # Calculate Velocity Contributions
+    rv_model, velo_dict = getVelocities(actv_dict,vmap_cor,imap,vrot,area)
+    # Measure Magnetic Flux
+    flux_dict = getMagneticFlux
+
+# =============================================================================
+# Identify Active Regions (Khaled's implementation of Haywood+ 2016)
+
+# =====================================
+# Coordinate Functions
 
 getRsun = lambda data_dict : int(data_dict['header']['RSUN_OBS']/data_dict['header']['CDELT1']*0.99)
 
@@ -59,7 +380,11 @@ def latlon(data_dict,iz,iy):
 
     return lat, lon
 
-def assembleSDOImages(date,data_dir,mask=True,norm=True,mag_std=8):
+
+# =====================================
+# Convenience Functions
+
+def assembleHaywoodImages(date,data_dir,mask=True,norm=True,mag_std=8):
     ico_fits = fits.open(glob(os.path.join(data_dir,'Intensitygram_cont',f'hmi.Ic_720s.{date}*.fits'))[0])
     icf_fits = fits.open(glob(os.path.join(data_dir,'Intensitygram_flat',f'hmi.Ic_noLimbDark_720s.{date}*.fits'))[0])
     mag_fits = fits.open(glob(os.path.join(data_dir,'Magnetogram',f'hmi.M_720s.{date}*.fits'))[0])
@@ -88,10 +413,6 @@ def assembleSDOImages(date,data_dir,mask=True,norm=True,mag_std=8):
         hdus.close()
 
     return data_products
-
-
-# =============================================================================
-# Identify Active Regions
 
 def groupLabels(imag,lim,less_than=True):
     if less_than:
@@ -145,6 +466,10 @@ def getAreaAndRadius(data_dict,y,z,Rsun,size_pix):
     return dict(zip(names,[area_obs,area_abs,area_rel,
                            radi_obs,radi_abs,radi_rel]))
 
+
+# =====================================
+# Gather Info on Spots/Faculae
+
 def spots(icf,icf_lim=0.89):
     # Group Labels
     imag_Slab, Slab, Ssize_pix = bigGroupLabels(icf['image'],lim=icf_lim,
@@ -169,7 +494,7 @@ def spots(icf,icf_lim=0.89):
 
     return imag_Slab, pd.DataFrame(Sdata)
 
-def brights(mag,mag_lim=24):
+def faculae(mag,mag_lim=24):
     ### FACULAE
     imag_Flab, Flab, Fsize_pix = bigGroupLabels(mag['image'],lim=mag_lim,
                                                 less_than=False,min_group_size=2)
