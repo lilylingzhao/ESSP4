@@ -69,10 +69,7 @@ def deleteDay(yyyymmdd,save_dir):
     for f in tqdm(file_list,desc=f'Removing {yyyymmdd} Files'):
         os.remove(f)
 
-# =============================================================================
-# SolAster Functionality
-
-class SDO(object):
+class SDO_Obs(object):
     """
     """
     def __init__(self, date, tstamp, save_dir):
@@ -95,7 +92,7 @@ class SDO(object):
     
         # Make sure we have all the map types
         assert vmap is not None, "No dopplergram file"
-        assert mmap is not None, "No magnetogram file
+        assert mmap is not None, "No magnetogram file"
         assert imap is not None, "No continuum intensity file"
 
         # Coordinate Transform for Maps
@@ -111,6 +108,9 @@ class SDO(object):
         self.correctVelocity()
         self.correctLimbDarkening()
         self.correctMagneticForeshortening()
+
+    # =============================================================================
+    # SolAster Functionality
 
     # =====================================
     # Corrections
@@ -134,10 +134,10 @@ class SDO(object):
                                          self.vmap, a_parameters)
     
         # calculate corrected velocity
-        corrected_vel = sdo_vmap.data - np.real(vsc) - np.real(vrot)
+        corrected_vel = self.vmap.data - np.real(vsc) - np.real(self.vrot)
     
         # corrected velocity maps
-        self.vmap_cor = sfuncs.corrected_map(corrected_vel, sdo_vmap,
+        self.vmap_cor = sfuncs.corrected_map(corrected_vel, self.vmap,
                                              map_type='Corrected-Dopplergram',
                                              frame=frames.HeliographicCarrington)
     
@@ -149,7 +149,7 @@ class SDO(object):
         self.Lij = lbfuncs.limb_polynomial(self.imap)
         
         # calculate corrected data
-        Iflat = sdo_imap.data / self.Lij
+        Iflat = self.imap.data / self.Lij
         
         # corrected intensity maps
         self.imap_cor = sfuncs.corrected_map(Iflat, self.imap,
@@ -177,18 +177,21 @@ class SDO(object):
     # =====================================
     # Process Images
     
+    def addDictValues(self,new_dict):
+        for attr,val in new_dict.items():
+            setattr(self,attr,val)
+    
     def getActiveRegions(self):
         # calculate magnetic threshold
-        self.active, self.quiet = sfuncs.mag_thresh(self.mu, self.mmap,
+        active, quiet = sfuncs.mag_thresh(self.mu, self.mmap,
                                       Br_cutoff=Parameters.Br_cutoff,
                                       mu_cutoff=Parameters.mu_cutoff)
                 
         # calculate intensity threshold
-        self.fac_inds, self.spot_inds = sfuncs.int_thresh(self.imap_cor,
-                                                          self.active, self.quiet)
+        fac_inds, spot_inds = sfuncs.int_thresh(self.imap_cor,active, quiet)
     
         # create threshold array
-        self.threshold_arr = sfuncs.thresh_map(self.fac_inds, self.spot_inds)
+        self.threshold_arr = sfuncs.thresh_map(fac_inds, spot_inds)
         # full threshold maps
         self.threshold_map = sfuncs.corrected_map(self.threshold_arr, self.mmap,
                                  map_type='Threshold',
@@ -196,6 +199,9 @@ class SDO(object):
         
         actv_dict = {'active':active,'quiet':quiet,
                      'fac_inds':fac_inds,'spot_inds':spot_inds}
+
+        self.addDictValues(actv_dict)
+        
         return actv_dict
     
     def getFillingFactors(self):        
@@ -203,7 +209,6 @@ class SDO(object):
         filling_factors = sfuncs.filling_factor(self.mu, self.mmap,
                                                 self.active,self.fac_inds,self.spot_inds,
                                                 mu_cutoff=Parameters.mu_cutoff)
-        self.f_bright, self.f_spot, s.f = filling_factors
         filling_dict = dict(zip(['f_bright','f_spot','f'],filling_factors))
     
         # calculate the area filling factor
@@ -213,16 +218,18 @@ class SDO(object):
                                    self.area,self.mu,self.mmap,self.fac_inds,
                                    athresh=Parameters.athresh,
                                    mu_cutoff=Parameters.mu_cutoff)
-        self.f_small, self.f_large, self.f_network, self.f_plage = area_filling_factors
         filling_dict |= dict(zip(['f_small','f_large','f_network','f_plage'],
                                  area_filling_factors))
+
+        self.addDictValues(filling_dict)
         
         return self.area, filling_dict
+
     
-    def getMagneticFlux(self)
+    def getMagneticFlux(self):
         # unsigned magnetic flux
         # unsigned observed flux
-        self.Bobs = sfuncs.unsigned_flux(self.mmap_obs, self.imap)
+        unsigned_obs_flux = sfuncs.unsigned_flux(self.mmap_obs, self.imap)
         flux_dict = {'Bobs':unsigned_obs_flux}
     
         # get the unsigned flux
@@ -231,16 +238,16 @@ class SDO(object):
                                            athresh=Parameters.athresh)
         flux_types = ['quiet_flux', 'ar_flux', 'conv_flux',
                       'pol_flux', 'pol_conv_flux']
-        for ikey,attr in enumerate(flux_types):
-            val = fluxes[ikey]
-            flux_dict[attr] = val
-            setattr(self,attr,val)
+        flux_dict |= dict(zip(flux_types,fluxes))
+
+        self.addDictValues(flux_dict)
         
         return flux_dict
     
     def getVelocities(self):
         # velocity contribution due to convective motion of quiet-Sun
-        self.v_quiet = sfuncs.v_quiet(self.vmap_corr, self.imap, self.quiet)
+        v_quiet = sfuncs.v_quiet(self.vmap_cor, self.imap, self.quiet)
+        velocity_dict = {'v_quiet':v_quiet}
     
         # velocity contribution due to rotational Doppler imbalance of active regions (faculae/sunspots)
         # calculate photospheric velocity
@@ -248,30 +255,39 @@ class SDO(object):
                                self.Lij, self.vrot, self.imap, self.mu,
                                self.fac_inds, self.spot_inds,
                                mu_cutoff=Parameters.mu_cutoff)
-        velocity_dict = dict(zip(['v_phot','v_phot_bright','v_phot_spot'],
+        velocity_dict |= dict(zip(['v_phot','v_phot_bright','v_phot_spot'],
                                  vphots))
     
         # velocity contribution due to suppression of convective blueshift by active regions
         # calculate disc-averaged velocity
-        velocity_dict['v_disc'] = sfuncs.v_disc(sdo_vamp_cor, sdo_imap)
+        v_disc = sfuncs.v_disc(self.vmap_cor, self.imap)
+        velocity_dict['v_disc'] = v_disc
     
         # calculate convective velocity
         velocity_dict['v_conv'] = v_disc - v_quiet
     
         # get area weighted convective velocities
-        vconvs = sfuncs.area_vconv(sdo_vmap_cor, sdo_imap,
-                                   actv_dict['active'], area,
+        vconvs = sfuncs.area_vconv(self.vmap_cor, self.imap,
+                                   self.active, self.area,
                                    athresh=Parameters.athresh)
         velocity_dict |= dict(zip(['v_conv_quiet','v_conv_large','v_conv_small'],
                                   vconvs))
-
-        for attr,val in velocity_dict.items():
-            setattr(self,attr,val)
         
+        self.addDictValues(velocity_dict)
+        
+        return velocity_dict
+
+    def getRvModel(self,inst):
         # calculate model RV
-        self.rv_model = rvs.calc_model(inst, v_conv, v_phot)
-    
-        return self.rv_model, velocity_dict
+        self.rv_model = rvs.calc_model(inst, self.v_conv, self.v_phot)
+        return self.rv_model
+
+    def getSolAsterValues(self):
+        self.getActiveRegions();
+        self.getFillingFactors();
+        self.getMagneticFlux();
+        self.getVelocities();
+        #self.getRvModel(inst);
 
 # =============================================================================
 # Identify Active Regions (Khaled's implementation of Haywood+ 2016)
