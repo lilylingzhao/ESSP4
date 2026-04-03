@@ -21,7 +21,6 @@ if os.path.isdir(save_dir):
 # Re-make Submissions Folder
 os.makedirs(save_dir)
 
-
 # =============================================================================
 # Scaffolding Functions
 
@@ -49,12 +48,23 @@ def addFileNames(results_file,t_tol=5/60/60/24):
                              direction='nearest',tolerance=t_tol)
     return filed_df
 
+def addPlanetIndexing(planet_df):
+    # Add Planet Names if Needed
+    if 'planet' not in planet_df:    
+        planet_df.insert(0,'planet',[*'bcdefghijklmnop'[:len(planet_df)]])
+
+    # Index by K
+    K_sort = planet_df['K [m/s]']
+    planet_df.insert(planet_df.columns.get_loc('K [m/s]')+1,'K_sort',
+                     len(planet_df)-np.argsort(K_sort)-1)
+    return planet_df
 
 # =============================================================================
 # AustinGeneva
 
 og_team_name = 'Austin_Geneva'
 team_name = 'AustinGeneva'
+print(Time.now().isot.split('T')[-1],team_name)
 method = 'CNNFitter'
 # Make Necessary File Structure
 makeTree(team_name,method,sub_folders=['results','planetFit'])
@@ -88,7 +98,7 @@ for ds in range(1,10):
 
     save_file = os.path.join(save_dir,team_name,method,'planetFit',
                              f'DS{ds}_{team_name}_{method}_planetFit.csv')
-    planet_df.to_csv(save_file,index=False)
+    addPlanetIndexing(planet_df).to_csv(save_file,index=False)
 
 # Copy Auxiliary Files
 file_list = glob(os.path.join(box_dir,'AustinGeneva','*.*'))
@@ -105,6 +115,7 @@ for og_file in file_list:
 
 og_team_name = 'DTU-Padova-PSU'
 team_name = 'DTUPadovaPSU'
+print(Time.now().isot.split('T')[-1],team_name)
 # Method Renaming
 method_dict = {}
 for mc in ['Single','Multiple']:
@@ -134,13 +145,21 @@ for og_file in file_list:
     # Assemble into new directory and file name
     file = os.path.join(save_dir,team_name,method_name,file_type,
                         f'{name_parts[0]}_{team_name}_{method_name}_{file_type}.csv')
-    # Copy File Over
-    shutil.copy(og_file,file)
-
-# Add File Names to Results Tables
-file_list = glob(os.path.join(save_dir,team_name,'*','results','*_results.csv'))
-for file in file_list:
-    addFileNames(file).to_csv(file,index=False)
+    
+    if file_type=='results':
+        # Add File Names to Results Tables
+        addFileNames(og_file).to_csv(file,index=False)
+    elif file_type=='planetFit':
+        # Add Planet Indexing
+        addPlanetIndexing(pd.read_csv(og_file)).to_csv(file,index=False)
+    elif file_type=='hyperparameters':
+        # Add units to period values (to mirror MALTED results)
+        df = pd.read_csv(og_file)
+        df = df.rename(columns={key:key+' [d]' for key in ['Prot','Pdec']})
+        df.to_csv(file,index=False)
+    else:
+        # Copy File Over, No Changes Needed
+        shutil.copy(og_file,file)
 
 # Move HTML Files
 file_list = sorted(glob(os.path.join(box_dir,og_team_name,'*','*.html')))
@@ -158,9 +177,64 @@ for og_file in file_list:
 
 
 # =============================================================================
+# GP
+
+team_name = 'MALTED'
+print(Time.now().isot.split('T')[-1],team_name)
+method = '1dGP'
+ind_list = ['CaII','Contrast','FWHM','Ha','BIS']
+ind_dict = dict(zip(ind_list,['CAII','CONT','FWHM','HA','BIS'])) # map to original
+fit_list = ['Circular','Keplerian']
+method_list = np.concatenate([[f'{method}{i}{f}' for i in ind_list] for f in fit_list])
+types_of_subs = ['results',
+                 'planetFit','planetFitPosteriors',
+                 'hyperparameters','hyperparametersPosteriors']
+# Make Necessary File Structure
+makeTree(team_name,method_list,sub_folders=types_of_subs)
+
+for dset in range(1,10):
+    for fit in fit_list:
+        for ind in ind_dict.keys():
+            all_files = glob(os.path.join(box_dir,'GP',fit.lower(),
+                                         f'DS{dset}_{team_name}_1dGP-{ind_dict[ind]}-{fit.lower()}_*.csv'))
+            if len(all_files)<len(types_of_subs):
+                continue
+            for sub in types_of_subs:
+                # Generate the original and reorganized file names
+                og_file_name = f'DS{dset}_{team_name}_1dGP-{ind_dict[ind]}-{fit.lower()}_{sub}.csv'
+                og_file = os.path.join(box_dir,'GP',fit.lower(),og_file_name)
+                file_name = f'DS{dset}_{team_name}_1dGP{ind}{fit}_{sub}.csv'
+                file = os.path.join(save_dir,team_name,f'1dGP{ind}{fit}',sub,file_name)
+
+                if sub in ['planetFitPosteriors','hyperparameters','hyperparametersPosteriors']:
+                    # Just move, no edits necessary!
+                    shutil.copy(og_file,file)
+                elif sub=='planetFit':
+                    # Add K index
+                    addPlanetIndexing(pd.read_csv(og_file)).to_csv(file,index=False)
+                else:
+                    assert sub=='results'
+                    # Add file names and sort by file names
+                    df = addFileNames(og_file)
+                    # Make instruments lower case
+                    df['Instrument'] = [i.lower() for i in df['Instrument']]
+                    # Remove units from all columns
+                    cols2skip = ['Standard File Name','Time [eMJD]','Instrument']
+                    col_dict = {c:c if c in cols2skip else c.split(' ')[0] for c in df.columns}
+                    df = df.rename(columns=col_dict)
+
+# Copy Auxiliary Files
+file_list = glob(os.path.join(box_dir,'GP',f'{team_name}*'))
+file_list.append(os.path.join(box_dir,'GP','README'))
+for og_file in file_list:
+    shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+
+
+# =============================================================================
 # GrazIWF
 
 team_name = 'GrazIWF'
+print(Time.now().isot.split('T')[-1],team_name)
 method = 'breakpoint'
 # Make Necessary File Structure
 makeTree(team_name,method,sub_folders=['results','planetFit','planetFitPosteriors'])
@@ -176,8 +250,13 @@ for og_file in file_list:
     df = pd.read_csv(og_file)
     col = df.columns
     df = df.rename(columns={col[0]:col[0][1:]})
-    # Add Instrument column
-    df['Instrument'] = [f.split('_')[-1].split('.')[0] for f in df['Standard File Name']]
+
+    if file_type=='results':
+        # Add Instrument column
+        df['Instrument'] = [f.split('_')[-1].split('.')[0] for f in df['Standard File Name']]
+    elif file_type=='planetFit':
+        # Add Planet Indexing
+        df = addPlanetIndexing(df)
     df.to_csv(file,index=False)
 
 # Copy Auxiliary Files
@@ -192,6 +271,7 @@ for og_file in file_list:
 
 og_team_name = 'TeamLSD'
 team_name = 'LSD'
+print(Time.now().isot.split('T')[-1],team_name)
 method = 'MMLSD'
 # Make Necessary File Structure
 makeTree(team_name,method,sub_folders=['results','planetFit','planetFitPosteriors'])
@@ -205,19 +285,30 @@ for ds in range(1,10):
 
         # Rewrite error to separate column
         df = pd.read_csv(fit_file)
-        for col in df.columns:
+        for col in df.columns[:-1]:
             for i in df.index:
                 val = df[col][i]
-                if type(val)==str and '±' in val:
+                if type(val)!=str:
+                    continue
+                if '±' in val:
                     val, err = val.split('±')
                     df.at[i,col] = float(val.strip())
                     if 'e'+col not in df.columns:
                         df.insert(df.columns.get_loc(col)+1,'e'+col,np.nan)
                     df.at[i,'e'+col] = float(err.strip())
-        # There's still going to be some "N to N" entries
+                elif 'to' in val:
+                    # Get rid of the "N to N" entries
+                    # Add original range to notes
+                    note = df.at[i,'Notes']
+                    df.at[i,'Notes'] = note + ('' if len(note)==0 else '; ') + col + ' is ' + val
+                    # Add float values to columns
+                    val_range = [float(i) for i in val.split(' to ')]
+                    df.at[i,col] = np.sum(val_range)/2
+                    df.at[i,'e'+col] = -np.diff(val_range)
         planet_fit_file = os.path.join(save_dir,team_name,method,'planetFit',
-                                 f'DS{ds}_{team_name}_{method}_planetFit.csv')
-        df.to_csv(planet_fit_file,index=False)
+                              f'DS{ds}_{team_name}_{method}_planetFit.csv')
+        # Add Planet Indexing
+        addPlanetIndexing(df).to_csv(planet_fit_file,index=False)
 
     # Copy Over Planet Posterior File Files as CSV
     pos_file = os.path.join(box_dir,og_team_name,'Planet_fit_posteriors',
@@ -252,6 +343,7 @@ shutil.copy(os.path.join(box_dir,og_team_name,'Method_details','MM_LSD_descripti
 # Oxford
 
 team_name = 'Oxford'
+print(Time.now().isot.split('T')[-1],team_name)
 method = 'DCPCA'
 makeTree(team_name,method,sub_folders=['results','planetFit','planetFitPosteriors'])
 
@@ -263,13 +355,16 @@ for og_file in file_list:
     base_name = os.path.basename(og_file).replace('planetfit','planetFit').replace('oxford','Oxford')
     file_type = base_name.split('_')[-1][:-4]
     file = os.path.join(save_dir,team_name,method,file_type,base_name)
-    # Copy File Over
-    shutil.copy(og_file,file)
-
-# Add File Names to Results Tables
-file_list = glob(os.path.join(save_dir,team_name,'*','results','*_results.csv'))
-for file in file_list:
-    addFileNames(file).to_csv(file,index=False)
+    
+    if file_type=='results':
+        # Add File Names to Results Tables
+        addFileNames(og_file).to_csv(file,index=False)
+    elif file_type=='planetFit':
+        # Add Planet Indexing
+        addPlanetIndexing(pd.read_csv(og_file)).to_csv(file,index=False)
+    else:
+        # Copy File Over, No Changes Needed
+        shutil.copy(og_file,file)
 
 # Copy Auxiliary Files
 file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
@@ -280,6 +375,7 @@ for og_file in file_list:
 # Sidera
 
 team_name = 'Sidera'
+print(Time.now().isot.split('T')[-1],team_name)
 method_list = ['FDACmean','FDACmeanXDM']
 makeTree(team_name,method_list)
 
@@ -312,6 +408,7 @@ for og_file in file_list:
 # WisconsinPennStateChicago
 
 team_name = 'WisconsinPennStateChicago'
+print(Time.now().isot.split('T')[-1],team_name)
 method_list = ['baseline', 'gauss', 'gaussPlusPCA']
 # Make Necessary File Structure
 makeTree(team_name,method_list)
