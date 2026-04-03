@@ -222,6 +222,7 @@ for dset in range(1,10):
                     cols2skip = ['Standard File Name','Time [eMJD]','Instrument']
                     col_dict = {c:c if c in cols2skip else c.split(' ')[0] for c in df.columns}
                     df = df.rename(columns=col_dict)
+                    df.to_csv(file,index=False)
 
 # Copy Auxiliary Files
 file_list = glob(os.path.join(box_dir,'GP',f'{team_name}*'))
