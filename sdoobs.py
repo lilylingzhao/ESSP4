@@ -27,6 +27,24 @@ from   SolAster.tools.settings          import *
 from   SolAster.tools.plotting_funcs    import hmi_plot
 
 # =============================================================================
+# Values to be calculated (organized by associated function)
+
+sdo_values = [
+    'date_ymd', 'tstamp', 'date_mjd', # Record Keeping
+    'f_bright', 'f_spot', 'f',        # getFillingFactors()
+    'f_small', 'f_large', 'f_network', 'f_plage', 
+    'Bobs', 'quiet_flux', 'ar_flux',  # getMagneticFlux()
+    'conv_flux', 'pol_flux', 'pol_conv_flux', 
+    'v_quiet', 'v_disc', 'v_conv',    # getVelocities
+    'v_phot', 'v_phot_bright', 'v_phot_spot', 
+    'v_conv_quiet', 'v_conv_large', 'v_conv_small', 
+    'bavg',                              # getBavg
+    'n_spot', 'fill_spot',               # labelSpots
+    'n_faculae', 'n_plage', 'n_network', # labelFaculae
+    'fill_faculae', 'fill_plage', 'fill_network', 
+    'date_saved',] #'rv_model'
+
+# =============================================================================
 # Managing SDO Files
 
 sdo_file_types = {'dopplergram'  :'hmi.v_720s',  # Velocity map
@@ -107,6 +125,8 @@ class SDO_Obs(object):
     Mag_lim = Mag_std*3
     
     def __init__(self, date, tstamp, save_dir=sdo_dir):
+        self.date = date
+        self.tstamp = tstamp
         # Read in Relevant SDO Files
         for key in type_list:
             nname = getNName(key)
@@ -125,6 +145,7 @@ class SDO_Obs(object):
 
         ### Values Relevant to KAM code
         imap_meta = self.imap.meta
+        self.date_mjd = Time(imap_meta['date-obs']).mjd
         # Data Dimensions
         self.Nrow, self.Ncol = self.imap.data.shape
         # Location of Data
@@ -325,6 +346,13 @@ class SDO_Obs(object):
 
     # =============================================================================
     # Identify Active Regions (Khaled's implementation of Haywood+ 2016)
+
+    # Use uncorrected data b/c that's what Khaled has tested
+    def getSdoFitsData_kam(self,file_type):
+        hdus = fits.open(getattr(self,f'{getNName(file_type)}_file'))
+        imag = np.flip(hdus[1].data.astype('float64').copy(),axis=1)
+        hdus.close()
+        return imag
     
     # =====================================
     # Coordinate Functions
@@ -415,7 +443,7 @@ class SDO_Obs(object):
     def labelSpots(self):
         # Mask and Normalize Continuum Image w/ No Limb Darkening
         imag_icf = self.getSdoFitsData_kam('flatcont') # Read in from FITS file as in original script
-        #imag_icf = self.imap_cor.data
+        #imag_icf = np.flip(self.imap_cor.data,axis=1) # mostly okay, but some discrepancies
         imag_icf[~self.sun_mask] = np.nan
         imag_icf /= np.nanmedian(imag_icf)
         
@@ -439,12 +467,14 @@ class SDO_Obs(object):
         Sdata |= ar_dict
 
         self.spot_imag = imag_Slab
+        self.n_spot = Slab
+        self.fill_spot = np.sum(Ssize_pix/self.muang(Sz,Sy))/self.sun_npix
         self.spot_dict = Sdata
     
     def labelFaculae(self):
         # Mask and Normalize Magnetic Image
         imag_mag = self.getSdoFitsData_kam('magnetogram') # Read in from FITS file as in original script
-        #imag_mag = self.mmap_cor.data
+        #imag_mag = np.flip(self.mmap_obs.data,axis=1) # Fine to use except for about the edges
         imag_mag[~self.sun_mask] = np.nan
         imag_mag[np.abs(imag_mag)<self.Mag_std] = 0
         
@@ -454,13 +484,11 @@ class SDO_Obs(object):
 
         ### Get Info On (Larger) Plages
         plag_mask = (Fsize_pix/self.Asun) > 20e-6
-        self.plag_mask = plag_mask.copy()
         # Coordinates
         Py, Pz = self.getCoordinates(imag_Flab,np.arange(Flab)[plag_mask])
         # Area and radius
         ar_dict = self.getAreaAndRadius(Py,Pz,Fsize_pix[plag_mask])
         # Store all values
-        self.facl_size = Fsize_pix[~plag_mask]
         Pdata = {}
         Pdata['size_pix'] = Fsize_pix[plag_mask]
         Pdata['z']         = Pz.copy()
@@ -470,23 +498,63 @@ class SDO_Obs(object):
         Pdata |= ar_dict
 
         self.facl_imag = imag_Flab
-        self.plag_dict = Pdata
+        
+        self.facl_size = Fsize_pix[~plag_mask]
+        self.n_faculae = len(self.facl_size)
+        self.fill_faculae = np.sum(self.facl_size)/self.sun_npix
+        
+        self.plag_dict  = Pdata
+        self.plag_mask  = plag_mask.copy()
+        self.n_plage    = np.sum(self.plag_mask)
+        self.fill_plage = np.sum(Fsize_pix[plag_mask]/muang(Pz,Py))/self.sun_npix
+
+        self.n_network = self.n_faculae-self.n_plage
+        self.fill_network = self.fill_faculae-self.fill_plage
 
     def getBavg(self):
         imag_ico = self.getSdoFitsData_kam('intensitygram')
-        #imag_ico = self.imap.data
+        #imag_ico = np.flip(self.imap.data,axis=1)
         imag_ico[~self.sun_mask] = np.nan
         # Mask and Normalize Magnetic Image
         imag_mag = self.getSdoFitsData_kam('magnetogram')
-        #imag_mag = self.mmap_cor.data
+        #imag_mag = np.flip(self.mmap_obs.data,axis=1)
         imag_mag[~self.sun_mask] = np.nan
         imag_mag[np.abs(imag_mag)<self.Mag_std] = 0
 
         self.bavg = np.nansum(np.abs(imag_mag)*imag_ico)/np.nansum(imag_ico)
 
-    # Remove this if it turns out we can use the corrected map values
-    def getSdoFitsData_kam(self,file_type):
-        hdus = fits.open(getattr(self,f'{getNName(file_type)}_file'))
-        imag = np.flip(hdus[1].data.astype('float64').copy(),axis=1)
-        hdus.close()
-        return imag
+    def getHaywoodValues(self):
+        self.getBavg();
+        self.labelSpots();
+        self.labelFaculae();
+
+    # =============================================================================
+    # Save All Values
+    def save(self,save_file,save_dir=sdo_dir,save_regions=True,
+             existing_df=None):
+        # Save Values
+        df = pd.DataFrame({key:getattr(self,key,np.nan) for key in sdo_values},index=[0])
+        df['date_saved'] = Time.now().isot
+        df['obs_name']   = f'{self.date}.{self.tstamp}'
+        # Add to existing data frame if given
+        if existing_df is not None:
+            df = pd.concate([existing_df,df],ignore_index=True)
+        df.to_csv(save_file,index=False)
+
+        # Save Regions if Requested
+        if save_regions:
+            # Spot Regions
+            np.save(os.path.join(save_dir,'Haywood','SpotMaps',
+                        f'{self.date}.{self.tstamp}_spotImag.npy'),
+                    self.spot_imag)
+            pd.DataFrame(self.spot_dict).to_csv(os.path.join(save_dir,'Haywood','SpotProps',
+                             f'{self.date}.{self.tstamp}_spotDict.npy'),index=False)
+
+            # Plage Regions
+            np.save(os.path.join(save_dir,'Haywood','FaculaeMaps',
+                        f'{self.date}.{self.tstamp}_faclImag.npy'),
+                    self.facl_imag)
+            pd.DataFrame(self.plag_dict).to_csv(os.path.join(save_dir,'Haywood','PlageProps',
+                             f'{self.date}.{self.tstamp}_plagDict.npy'),index=False)
+        
+        return df
