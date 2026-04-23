@@ -56,7 +56,7 @@ type_list = list(sdo_file_types.keys())
 getNName = lambda key : key[0]+'map' if key!='dopplergram' else 'vmap'
 nname_list = [getNName(key) for key in sdo_file_types.keys()]
 
-def getOriginalSdoFileName(yyyymmdd,tstamp,file_type,tai_num=3):
+def getOriginalSdoFileName(yyyymmdd,tstamp,file_type,tai_num=3,full_path=False):
     # Format information into SDO file name convention
     file_type = file_type.lower()
     file_name = sdo_file_types[file_type].lower()
@@ -69,22 +69,22 @@ def getOriginalSdoFileName(yyyymmdd,tstamp,file_type,tai_num=3):
         file_name += file_type
     file_name += '.fits'
     if full_path:
-        file_name = os.path.join(sdo_dir,file_type.capitalize,file_name)
+        file_name = os.path.join(sdo_dir,file_type.capitalize(),file_name)
     return file_name
 
 def getSdoFileName(yymmdd,tstamp,file_type,
                    full_path=False,sdo_dir=sdo_dir):
     file_name = f'{yymmdd}.{tstamp}_{file_type}.fits'
     if full_path:
-        return os.path.join(sdo_dir,file_type.capitalize(),file_name)
-    else:
-        return file_name
+        file_name =  os.path.join(sdo_dir,file_type.capitalize(),file_name)
+    return file_name
 
-def downloadDay(day,save_dir,
-                cadence=12*u.minute,
-                e_mail='lilylingzhao@uchicago.edu'):
-    day_mjd = Time(day,format='isot').mjd if '-' in day else int(day)
-    dmin, dmax = Time([day_mjd, day_mjd+1],format='mjd').isot
+def downloadDay(ymd,save_dir,min_hr=0,max_hr=24,
+                cadence=12*u.minute,overwrite=False,
+                e_mail='lilylingzhao@uchicago.edu',
+                skip_tstamps=[]):
+    day_mjd = Time(f'20{ymd[:2]}-{ymd[2:4]}-{ymd[4:]}',format='isot').mjd
+    dmin, dmax = Time([day_mjd+min_hr/24, day_mjd+max_hr/24],format='mjd').isot
 
     for key in type_list:
         matching_images = Fido.search(
@@ -93,9 +93,25 @@ def downloadDay(day,save_dir,
             a.Sample(cadence),        # cadence
             a.jsoc.Notify(e_mail)     # specify user
         )
-        
+
+        # Check For Files That Already Exist
+        existing_files = []
+        for irec,trec in enumerate(matching_images['jsoc']['T_REC']):
+            date, time, _ = trec.split('_')
+            # Get saved file names
+            ymd = date.replace('.','')[2:]
+            tstamp = time.replace(':','')
+            jsoc_name = getOriginalSdoFileName('20'+ymd,tstamp,key,tai_num=3,full_path=True)
+            essp_name = getSdoFileName(ymd,tstamp,key,full_path=True)
+            # If they exist, remove from object
+            if tstamp in skip_tstamps or os.path.isfile(jsoc_name) or os.path.isfile(essp_name):
+                existing_files.append(irec)
+            matching_images['jsoc'].remove_row(existing_files)
+
+        # Download Files
         downloaded_files = Fido.fetch(matching_images,path=os.path.join(save_dir,
                                           key.capitalize(),'{file}'))
+        # Iterate over any files that failed to download
         failed_files = downloaded_files.errors
         counter = 0
         while len(failed_files)>0:
@@ -106,10 +122,10 @@ def downloadDay(day,save_dir,
 
         # Rename all files
         dir_name = os.path.join(save_dir,key.capitalize())
-        file_list = glob(os.path.join(dir_name,f'hmi*720s.20{date}*.fits'))
+        file_list = glob(os.path.join(dir_name,f'hmi*720s.20{ymd}*.fits'))
         for file in file_list:
-            ymd, tstamp = os.path.basename(file).split('.')[2].split('_')[:2]
-            os.rename(file,getSdoFileName(ymd[2:],tstamp,key,full_path=True))
+            yyyymmdd, file_tstamp = os.path.basename(file).split('.')[2].split('_')[:2]
+            os.rename(file,getSdoFileName(yyyymmdd[2:],file_tstamp,key,full_path=True))
 
 def deleteDay(yymmdd,save_dir=sdo_dir):
     file_list = glob(save_dir,'*',f'{yymmdd}_*.fits')
@@ -125,8 +141,8 @@ class SDO_Obs(object):
     Mag_lim = Mag_std*3
     
     def __init__(self, date, tstamp, save_dir=sdo_dir):
-        self.date = date
-        self.tstamp = tstamp
+        self.date_ymd = str(date)
+        self.tstamp = str(tstamp)
         # Read in Relevant SDO Files
         for key in type_list:
             nname = getNName(key)
@@ -506,7 +522,7 @@ class SDO_Obs(object):
         self.plag_dict  = Pdata
         self.plag_mask  = plag_mask.copy()
         self.n_plage    = np.sum(self.plag_mask)
-        self.fill_plage = np.sum(Fsize_pix[plag_mask]/muang(Pz,Py))/self.sun_npix
+        self.fill_plage = np.sum(Fsize_pix[plag_mask]/self.muang(Pz,Py))/self.sun_npix
 
         self.n_network = self.n_faculae-self.n_plage
         self.fill_network = self.fill_faculae-self.fill_plage
@@ -535,26 +551,26 @@ class SDO_Obs(object):
         # Save Values
         df = pd.DataFrame({key:getattr(self,key,np.nan) for key in sdo_values},index=[0])
         df['date_saved'] = Time.now().isot
-        df['obs_name']   = f'{self.date}.{self.tstamp}'
+        df['obs_name']   = f'{self.date_ymd}.{self.tstamp}'
         # Add to existing data frame if given
         if existing_df is not None:
-            df = pd.concate([existing_df,df],ignore_index=True)
+            df = pd.concat([existing_df,df],ignore_index=True)
         df.to_csv(save_file,index=False)
 
         # Save Regions if Requested
         if save_regions:
             # Spot Regions
             np.save(os.path.join(save_dir,'Haywood','SpotMaps',
-                        f'{self.date}.{self.tstamp}_spotImag.npy'),
+                        f'{self.date_ymd}.{self.tstamp}_spotImag.npy'),
                     self.spot_imag)
             pd.DataFrame(self.spot_dict).to_csv(os.path.join(save_dir,'Haywood','SpotProps',
-                             f'{self.date}.{self.tstamp}_spotDict.npy'),index=False)
+                             f'{self.date_ymd}.{self.tstamp}_spotDict.csv'),index=False)
 
             # Plage Regions
             np.save(os.path.join(save_dir,'Haywood','FaculaeMaps',
-                        f'{self.date}.{self.tstamp}_faclImag.npy'),
+                        f'{self.date_ymd}.{self.tstamp}_faclImag.npy'),
                     self.facl_imag)
             pd.DataFrame(self.plag_dict).to_csv(os.path.join(save_dir,'Haywood','PlageProps',
-                             f'{self.date}.{self.tstamp}_plagDict.npy'),index=False)
+                             f'{self.date_ymd}.{self.tstamp}_plagDict.csv'),index=False)
         
         return df
