@@ -11,6 +11,8 @@ from skimage.draw import ellipse as circle
 import pandas as pd
 from tqdm import tqdm
 
+from utils import sdo_dir
+
 import sunpy.map
 from sunpy.net import Fido
 from sunpy.net import attrs as a
@@ -27,35 +29,55 @@ from   SolAster.tools.plotting_funcs    import hmi_plot
 # =============================================================================
 # Managing SDO Files
 
-sdo_file_types = {'dopplergram':'hmi.v_720s',  # Velocity map
-                  'magnetogram':'hmi.m_720s',  # Magnetic field map
-                  'continuum'  :'hmi.IC_720s'} # Continuum intensity
+sdo_file_types = {'dopplergram'  :'hmi.v_720s',  # Velocity map
+                  'magnetogram'  :'hmi.m_720s',  # Magnetic field map
+                  'intensitygram':'hmi.ic_720s', # Continuum intensity
+                  'flatcont'     :'hmi.ic_nolimbdark_720s'} # Limb-Darkening-corrected Intensity
+type_list = list(sdo_file_types.keys())
 
-def getSdoFileName(yyyymmdd,tstamp,file_type):
+getNName = lambda key : key[0]+'map' if key!='dopplergram' else 'vmap'
+nname_list = [getNName(key) for key in sdo_file_types.keys()]
+
+def getOriginalSdoFileName(yyyymmdd,tstamp,file_type,tai_num=3):
     # Format information into SDO file name convention
     file_type = file_type.lower()
-    file_name = sdo_file_types[file_type.lower()].lower()
-    file_name += f'.{yyyymmdd}_{tstamp}_TAI.3.'
-    file_name += file_type.capitalize() if file_type=='dopplergram' else file_type
+    file_name = sdo_file_types[file_type].lower()
+    file_name += f'.{yyyymmdd}_{tstamp}_TAI.{tai_num}.'
+    if file_type=='dopplergram':
+        file_name += file_type.capitalize()
+    elif file_type=='flatcont':
+        file_name += 'continuum'
+    else:
+        file_name += file_type
     file_name += '.fits'
+    if full_path:
+        file_name = os.path.join(sdo_dir,file_type.capitalize,file_name)
     return file_name
+
+def getSdoFileName(yymmdd,tstamp,file_type,
+                   full_path=False,sdo_dir=sdo_dir):
+    file_name = f'{yymmdd}.{tstamp}_{file_type}.fits'
+    if full_path:
+        return os.path.join(sdo_dir,file_type.capitalize(),file_name)
+    else:
+        return file_name
 
 def downloadDay(day,save_dir,
                 cadence=12*u.minute,
                 e_mail='lilylingzhao@uchicago.edu'):
     day_mjd = Time(day,format='isot').mjd if '-' in day else int(day)
-    dmin, dmax = Time([day_mjd+7/24, day_mjd+25/24],format='mjd').isot
+    dmin, dmax = Time([day_mjd, day_mjd+1],format='mjd').isot
 
-    for key in sdo_file_types.keys():
+    for key in type_list:
         matching_images = Fido.search(
             a.Time(dmin,dmax),        # time range in which to search for data
             a.jsoc.Series(sdo_file_types[key]), # list of data products to access
             a.Sample(cadence),        # cadence
-            a.jsoc.Notify(e_mail)     # specify uset
+            a.jsoc.Notify(e_mail)     # specify user
         )
         
-        downloaded_files = Fido.fetch(matching_images,
-                                      path=os.path.join(save_dir,key,'{file}'))
+        downloaded_files = Fido.fetch(matching_images,path=os.path.join(save_dir,
+                                          key.capitalize(),'{file}'))
         failed_files = downloaded_files.errors
         counter = 0
         while len(failed_files)>0:
@@ -64,45 +86,57 @@ def downloadDay(day,save_dir,
             counter += 1
         print(f'{day}, {key} Redos: {counter}')
 
-def deleteDay(yyyymmdd,save_dir):
-    file_list = glob(save_dir,'*',f'hmi*_720s.{yyyymmdd}_*.fits')
-    for f in tqdm(file_list,desc=f'Removing {yyyymmdd} Files'):
+        # Rename all files
+        dir_name = os.path.join(save_dir,key.capitalize())
+        file_list = glob(os.path.join(dir_name,f'hmi*720s.20{date}*.fits'))
+        for file in file_list:
+            ymd, tstamp = os.path.basename(file).split('.')[2].split('_')[:2]
+            os.rename(file,getSdoFileName(ymd[2:],tstamp,key,full_path=True))
+
+def deleteDay(yymmdd,save_dir=sdo_dir):
+    file_list = glob(save_dir,'*',f'{yymmdd}_*.fits')
+    for f in tqdm(file_list,desc=f'Removing {yymmdd} Files'):
         os.remove(f)
 
 class SDO_Obs(object):
     """
     """
-    def __init__(self, date, tstamp, save_dir):
-        # Assemble List of Relvant SDO Files
-        file_list = [os.path.join(save_dir,key.capitalize(),
-                                  getSdoFileName(date,tstamp,key)) \
-                     for key in sdo_file_types.keys()]
-        map_seq = sunpy.map.Map(file_list)
-        # split into data types
-        vmap, mmap, imap = None, None, None
-        for j, map_obj in enumerate(map_seq):
-            if map_obj.meta['content'] == 'DOPPLERGRAM':
-                vmap = map_obj
-            elif map_obj.meta['content'] == 'MAGNETOGRAM':
-                mmap = map_obj
-            elif map_obj.meta['content'] == 'CONTINUUM INTENSITY':
-                imap = map_obj
-            else:
-                assert False, print('File list includes map of unexpected content')
+    # Intensity and Magnetic Thresholds (for KAM code)
+    Icf_lim = 0.89
+    Mag_std = 8
+    Mag_lim = Mag_std*3
     
-        # Make sure we have all the map types
-        assert vmap is not None, "No dopplergram file"
-        assert mmap is not None, "No magnetogram file"
-        assert imap is not None, "No continuum intensity file"
+    def __init__(self, date, tstamp, save_dir=sdo_dir):
+        # Read in Relevant SDO Files
+        for key in type_list:
+            nname = getNName(key)
+            setattr(self,f'{nname}_file',getSdoFileName(date,tstamp,key,full_path=True))
+            setattr(self,nname,sunpy.map.Map(getattr(self,f'{nname}_file')))
 
         # Coordinate Transform for Maps
         # https://tamarervin.github.io/SolAster/calcs/coords/
-        self.x, self.y, self.pdim, self.r, self.d, self.mu = ctfuncs.coordinates(vmap)
+        self.x, self.y, self.pdim, self.r, self.d, self.mu = ctfuncs.coordinates(self.vmap)
         self.wij, self.nij, self.rij = ctfuncs.vel_coords(self.x, self.y,
-                                                          self.pdim, self.r, vmap)
+                                                          self.pdim, self.r, self.vmap)
         
         # remove bad mu values (i.e. <0.1) mostly about the edge
-        self.vmap, self.mmap, self.imap = ctfuncs.fix_mu(self.mu, [vmap, mmap, imap])
+        self.vmap, self.mmap, self.imap = ctfuncs.fix_mu(self.mu,
+                                                         [self.vmap, self.mmap, self.imap])
+
+        ### Values Relevant to KAM code
+        imap_meta = self.imap.meta
+        # Data Dimensions
+        self.Nrow, self.Ncol = self.imap.data.shape
+        # Location of Data
+        self.Rsun = int(imap_meta['RSUN_OBS']/imap_meta['CDELT1']*0.99)
+        self.Asun = np.pi*self.Rsun**2
+        self.xcenter, self.ycenter = int(imap_meta['CRPIX1']), int(imap_meta['CRPIX2'])
+        # Mask for Just Data
+        sun_mask = np.zeros_like(self.imap.data,dtype=bool)
+        circ = circle(self.xcenter,self.ycenter,self.Rsun,self.Rsun)
+        sun_mask[circ] = True
+        self.sun_mask = sun_mask.copy()
+        self.sun_npix = np.sum(sun_mask)
 
         ### Corrections
         self.correctVelocity()
@@ -289,185 +323,170 @@ class SDO_Obs(object):
         self.getVelocities();
         #self.getRvModel(inst);
 
-# =============================================================================
-# Identify Active Regions (Khaled's implementation of Haywood+ 2016)
-
-# =====================================
-# Coordinate Functions
-
-getRsun = lambda data_dict : int(data_dict['header']['RSUN_OBS']/data_dict['header']['CDELT1']*0.99)
-
-# Function for mu angle
-def muang(data_dict,iy,ix):
-
-    # Dimension
-    Ny, Nx = data_dict['image'].shape
-    Rsun = getRsun(data_dict)
+    # =============================================================================
+    # Identify Active Regions (Khaled's implementation of Haywood+ 2016)
     
-    # Cartesian coordinates
-    x = ix - Nx/2
-    y = iy - Ny/2
-    z = np.sqrt(Rsun**2 - x**2 - y**2)
-    
-    # Mu angle
-    muang = np.cos(np.arctan2(np.sqrt(x**2+y**2),z))
+    # =====================================
+    # Coordinate Functions
 
-    return muang
-
-# Function for latitude & longitude
-def latlon(data_dict,iz,iy):
-    
-    # Dimension
-    Nz, Ny = data_dict['image'].shape
-    Rsun = getRsun(data_dict)
-
-    # Cartesian coordinates
-    z = iz - Nz/2
-    y = iy - Ny/2
-    x = np.sqrt(Rsun**2 - y**2 - z**2)
-    
-    # Spherical coordinates
-    lat = np.degrees(np.arctan2(np.sqrt(x**2+y**2),z)) - 90
-    lon = np.degrees(np.arctan2(y,x))
-
-    return lat, lon
-
-
-# =====================================
-# Convenience Functions
-
-def assembleHaywoodImages(date,data_dir,mask=True,norm=True,mag_std=8):
-    ico_fits = fits.open(glob(os.path.join(data_dir,'Intensitygram_cont',f'hmi.Ic_720s.{date}*.fits'))[0])
-    icf_fits = fits.open(glob(os.path.join(data_dir,'Intensitygram_flat',f'hmi.Ic_noLimbDark_720s.{date}*.fits'))[0])
-    mag_fits = fits.open(glob(os.path.join(data_dir,'Magnetogram',f'hmi.M_720s.{date}*.fits'))[0])
-
-    data_products = []
-    for data_type,hdus in zip(('ico','icf','mag'),[ico_fits,icf_fits,mag_fits]):
-        imag, head = np.flip(hdus[1].data.copy(),axis=1), hdus[1].header.copy()
-
-        if mask:
-            # Mask image outside R_sun
-            Rsun = int(head['RSUN_OBS']/head['CDELT1']*0.99)
-            xcen = int(head['CRPIX1'])
-            ycen = int(head['CRPIX2'])
-            circ = circle(xcen, ycen, Rsun, Rsun)
-            r_mask = np.ones_like(imag, dtype=bool)
-            r_mask[circ] = False
-            imag[r_mask] = np.nan
-
-        if norm:
-            if data_type=='icf':
-                imag /= np.nanmedian(imag)
-            elif data_type=='mag':
-                imag[np.abs(imag) < mag_std] = 0
+    # Function for mu angle
+    def muang(self,iy,ix):
+        # Cartesian coordinates
+        x = ix - self.Ncol/2
+        y = iy - self.Nrow/2
+        z = np.sqrt(self.Rsun**2 - x**2 - y**2)
         
-        data_products.append(dict(zip(['image','header'],[imag,head])))
+        # Mu angle
+        muang = np.cos(np.arctan2(np.sqrt(x**2+y**2),z))
+    
+        return muang
+    
+    # Function for latitude & longitude
+    def latlon(self,iz,iy):
+    
+        # Cartesian coordinates
+        z = iz - self.Nrow/2
+        y = iy - self.Ncol/2
+        x = np.sqrt(self.Rsun**2 - y**2 - z**2)
+        
+        # Spherical coordinates
+        lat = np.degrees(np.arctan2(np.sqrt(x**2+y**2),z)) - 90
+        lon = np.degrees(np.arctan2(y,x))
+    
+        return lat, lon
+
+    # =====================================
+    # Convenience Functions
+
+    def groupLabels(self,imag,lim,less_than=True):
+        if less_than:
+            labelImage = lambda imag : ndimage.label(np.abs(imag) < lim)
+        else:
+            labelImage = lambda imag : ndimage.label(np.abs(imag) > lim)
+        imag_lab, lab = labelImage(imag.copy())
+        imag_map = imag_lab > 0
+        
+        # Pixel sizes of all groups
+        size_pix = np.zeros(lab, dtype=int)
+        pix      = np.where(imag_map)
+        for i in range(len(pix[0])):
+            size_pix[imag_lab[pix[0][i],pix[1][i]]-1] += 1
+        
+        return imag_lab, lab, size_pix
+    
+    def bigGroupLabels(self,imag,lim,less_than=True,min_group_size=2):
+        imag_lab, lab, size_pix = self.groupLabels(imag,lim,less_than=less_than)
+    
+        # Image copy with NaNs at positions of groups that are too small
+        imag_copy = np.copy(imag)
+        lab_small = np.where(size_pix < min_group_size)[0] + 1
+        for i in range(len(lab_small)):
+            imag_copy[imag_lab == lab_small[i]] = np.nan
+        
+        return self.groupLabels(imag_copy,lim,less_than=less_than)
+    
+    def getCoordinates(self,imag_lab,lab_list):
+        z = np.ones_like(lab_list)
+        y = np.ones_like(lab_list)
+        for i,idx in enumerate(lab_list):
+            pix  = np.where(imag_lab == idx+1)
+            z[i] = np.round(np.mean(pix[0])).astype(int)
+            y[i] = np.round(np.mean(pix[1])).astype(int)
+    
+        return y,z
+    
+    def getAreaAndRadius(self,y,z,size_pix):
+        area_obs = size_pix
+        area_abs = area_obs/self.muang(z,y)
+        area_rel = area_abs/self.Asun
+        
+        radi_obs = np.sqrt(area_obs/np.pi)
+        radi_abs = np.sqrt(area_abs/np.pi)
+        radi_rel = radi_abs/self.Rsun
+    
+        names = np.concatenate([[f'{i}_{j}' for j in ['obs','abs','rel']]for i in ['area','radi']])
+    
+        return dict(zip(names,[area_obs,area_abs,area_rel,
+                               radi_obs,radi_abs,radi_rel]))
+    
+    # =====================================
+    # Gather Info on Spots/Faculae
+    
+    def labelSpots(self):
+        # Mask and Normalize Continuum Image w/ No Limb Darkening
+        imag_icf = self.getSdoFitsData_kam('flatcont') # Read in from FITS file as in original script
+        #imag_icf = self.imap_cor.data
+        imag_icf[~self.sun_mask] = np.nan
+        imag_icf /= np.nanmedian(imag_icf)
+        
+        # Group Labels
+        imag_Slab, Slab, Ssize_pix = self.bigGroupLabels(imag_icf, lim=self.Icf_lim,
+                                                         less_than=True, min_group_size=2)
+    
+        # Coordinates
+        Sy, Sz = self.getCoordinates(imag_Slab,range(Slab))
+        
+        # Area and radius
+        ar_dict = self.getAreaAndRadius(Sy,Sz,Ssize_pix)
+    
+        # Store all values
+        Sdata = {}
+        Sdata['size_pix' ] = Ssize_pix
+        Sdata['z']         = Sz.copy()
+        Sdata['y']         = Sy.copy()
+        Sdata['mu_angle' ] = self.muang(Sz,Sy)
+        Sdata['latitude' ], Sdata['longitude'] = self.latlon(Sz,Sy)
+        Sdata |= ar_dict
+
+        self.spot_imag = imag_Slab
+        self.spot_dict = Sdata
+    
+    def labelFaculae(self):
+        # Mask and Normalize Magnetic Image
+        imag_mag = self.getSdoFitsData_kam('magnetogram') # Read in from FITS file as in original script
+        #imag_mag = self.mmap_cor.data
+        imag_mag[~self.sun_mask] = np.nan
+        imag_mag[np.abs(imag_mag)<self.Mag_std] = 0
+        
+        ### FACULAE
+        imag_Flab, Flab, Fsize_pix = self.bigGroupLabels(imag_mag,lim=self.Mag_lim,
+                                                         less_than=False,min_group_size=2)
+
+        ### Get Info On (Larger) Plages
+        plag_mask = (Fsize_pix/self.Asun) > 20e-6
+        self.plag_mask = plag_mask.copy()
+        # Coordinates
+        Py, Pz = self.getCoordinates(imag_Flab,np.arange(Flab)[plag_mask])
+        # Area and radius
+        ar_dict = self.getAreaAndRadius(Py,Pz,Fsize_pix[plag_mask])
+        # Store all values
+        self.facl_size = Fsize_pix[~plag_mask]
+        Pdata = {}
+        Pdata['size_pix'] = Fsize_pix[plag_mask]
+        Pdata['z']         = Pz.copy()
+        Pdata['y']         = Py.copy()
+        Pdata['mu_angle']  = self.muang(Pz,Py)
+        Pdata['latitude'], Pdata['longitude'] = self.latlon(Pz,Py)
+        Pdata |= ar_dict
+
+        self.facl_imag = imag_Flab
+        self.plag_dict = Pdata
+
+    def getBavg(self):
+        imag_ico = self.getSdoFitsData_kam('intensitygram')
+        #imag_ico = self.imap.data
+        imag_ico[~self.sun_mask] = np.nan
+        # Mask and Normalize Magnetic Image
+        imag_mag = self.getSdoFitsData_kam('magnetogram')
+        #imag_mag = self.mmap_cor.data
+        imag_mag[~self.sun_mask] = np.nan
+        imag_mag[np.abs(imag_mag)<self.Mag_std] = 0
+
+        self.bavg = np.nansum(np.abs(imag_mag)*imag_ico)/np.nansum(imag_ico)
+
+    # Remove this if it turns out we can use the corrected map values
+    def getSdoFitsData_kam(self,file_type):
+        hdus = fits.open(getattr(self,f'{getNName(file_type)}_file'))
+        imag = np.flip(hdus[1].data.astype('float64').copy(),axis=1)
         hdus.close()
-
-    return data_products
-
-def groupLabels(imag,lim,less_than=True):
-    if less_than:
-        labelImage = lambda imag : ndimage.label(np.abs(imag) < lim)
-    else:
-        labelImage = lambda imag : ndimage.label(np.abs(imag) > lim)
-    imag_lab, lab = labelImage(imag.copy())
-    imag_map = imag_lab > 0
-    
-    # Pixel sizes of all groups
-    size_pix = np.zeros(lab, dtype=int)
-    pix      = np.where(imag_map)
-    for i in range(len(pix[0])):
-        size_pix[imag_lab[pix[0][i],pix[1][i]]-1] += 1
-    
-    return imag_lab, lab, size_pix
-
-def bigGroupLabels(imag,lim,less_than=True,min_group_size=2):
-    imag_lab, lab, size_pix = groupLabels(imag,lim,less_than=less_than)
-
-    # Image copy with NaNs at positions of groups that are too small
-    imag_copy = np.copy(imag)
-    lab_small = np.where(size_pix < min_group_size)[0] + 1
-    for i in range(len(lab_small)):
-        imag_copy[imag_lab == lab_small[i]] = np.nan
-    
-    return groupLabels(imag_copy,lim,less_than=less_than)
-
-def getCoordinates(imag_lab,lab):
-    z = np.ones_like(lab)
-    y = np.ones_like(lab)
-    for i,idx in enumerate(lab):
-        pix  = np.where(imag_lab == idx+1)
-        z[i] = np.round(np.mean(pix[0])).astype(int)
-        y[i] = np.round(np.mean(pix[1])).astype(int)
-
-    return y,z
-
-def getAreaAndRadius(data_dict,y,z,Rsun,size_pix):
-    Asun = np.pi*Rsun**2
-    area_obs = size_pix
-    area_abs = area_obs/muang(data_dict,z,y)
-    area_rel = area_abs/Asun
-    
-    radi_obs = np.sqrt(area_obs/np.pi)
-    radi_abs = np.sqrt(area_abs/np.pi)
-    radi_rel = radi_abs/Rsun
-
-    names = np.concatenate([[f'{i}_{j}' for j in ['obs','abs','rel']]for i in ['area','radi']])
-
-    return dict(zip(names,[area_obs,area_abs,area_rel,
-                           radi_obs,radi_abs,radi_rel]))
-
-
-# =====================================
-# Gather Info on Spots/Faculae
-
-def spots(icf,icf_lim=0.89):
-    # Group Labels
-    imag_Slab, Slab, Ssize_pix = bigGroupLabels(icf['image'],lim=icf_lim,
-                                                less_than=True,min_group_size=2)
-
-    # Coordinates
-    Sy, Sz = getCoordinates(imag_Slab,range(Slab))
-    
-    # Area and radius
-    Rsun = getRsun(icf)
-    ar_dict = getAreaAndRadius(icf,Sy,Sz,Rsun,Ssize_pix)
-
-    # Store all values
-    Sdata = {}
-    Sdata['size_pix' ] = Ssize_pix
-    Sdata['z']         = Sz.copy()
-    Sdata['y']         = Sy.copy()
-    Sdata['mu_angle' ] = muang (icf,Sz,Sy)
-    Sdata['latitude' ] = latlon(icf,Sz,Sy)[0]
-    Sdata['longitude'] = latlon(icf,Sz,Sy)[1]
-    Sdata |= ar_dict
-
-    return imag_Slab, pd.DataFrame(Sdata)
-
-def faculae(mag,mag_lim=24):
-    ### FACULAE
-    imag_Flab, Flab, Fsize_pix = bigGroupLabels(mag['image'],lim=mag_lim,
-                                                less_than=False,min_group_size=2)
-    
-    # Coordinates
-    Fy, Fz = getCoordinates(imag_Flab,range(Flab))
-    
-    # Area and radius
-    Rsun = getRsun(mag)
-    Asun = np.pi*Rsun**2
-    ar_dict = getAreaAndRadius(mag,Fy,Fz,Rsun,Fsize_pix)
-
-    # Store all values
-    Fdata = {}
-    Fdata['size_pix' ] = Fsize_pix
-    Fdata['plage']     = Fsize_pix/Asun > 20e-6 # Mark whether it's a plage or not
-    Fdata['z']         = Fz.copy()
-    Fdata['y']         = Fy.copy()
-    Fdata['mu_angle' ] = muang (mag,Fz,Fy)
-    Fdata['latitude' ] = latlon(mag,Fz,Fy)[0]
-    Fdata['longitude'] = latlon(mag,Fz,Fy)[1]
-    Fdata |= ar_dict
-
-    return imag_Flab, pd.DataFrame(Fdata)
+        return imag
