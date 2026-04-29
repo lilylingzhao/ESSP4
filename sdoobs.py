@@ -64,6 +64,13 @@ def ymd2mjd(ymd):
     ymd = str(ymd)
     return Time(f'20{ymd[:2]}-{ymd[2:4]}-{ymd[4:]}').mjd
 
+def leadingZeros(val,tot_len=6):
+    # Add any needed zeros to beginning of tstamp
+    val = str(val)
+    while len(val)<tot_len:
+        val = '0'+val
+    return val
+
 def getOriginalSdoFileName(yyyymmdd,tstamp,file_type,tai_num=3,full_path=False):
     # Format information into SDO file name convention
     file_type = file_type.lower()
@@ -160,7 +167,7 @@ class SDO_Obs(object):
     
     def __init__(self, date, tstamp, save_dir=sdo_dir):
         self.date_ymd = str(date)
-        self.tstamp = str(tstamp)
+        self.tstamp = leadingZeros(tstamp)
         # Read in Relevant SDO Files
         for key in type_list:
             nname = getNName(key)
@@ -487,6 +494,7 @@ class SDO_Obs(object):
     
         # Coordinates
         Sy, Sz = self.getCoordinates(imag_Slab,range(Slab))
+        edge_mask = (self.Rsun**2-Sy**2-Sz**2)<0
         
         # Area and radius
         ar_dict = self.getAreaAndRadius(Sy,Sz,Ssize_pix)
@@ -502,7 +510,7 @@ class SDO_Obs(object):
 
         self.spot_imag = imag_Slab
         self.n_spot = Slab
-        self.fill_spot = np.sum(Ssize_pix/self.muang(Sz,Sy))/self.sun_npix
+        self.fill_spot = np.nansum(Ssize_pix/Sdata['mu_angle'])/self.sun_npix
         self.spot_dict = Sdata
     
     def labelFaculae(self):
@@ -520,6 +528,7 @@ class SDO_Obs(object):
         plag_mask = (Fsize_pix/self.Asun) > 20e-6
         # Coordinates
         Py, Pz = self.getCoordinates(imag_Flab,np.arange(Flab)[plag_mask])
+        edge_mask = (self.Rsun**2-Py**2-Pz**2)<0
         # Area and radius
         ar_dict = self.getAreaAndRadius(Py,Pz,Fsize_pix[plag_mask])
         # Store all values
@@ -540,7 +549,7 @@ class SDO_Obs(object):
         self.plag_dict  = Pdata
         self.plag_mask  = plag_mask.copy()
         self.n_plage    = np.sum(self.plag_mask)
-        self.fill_plage = np.sum(Fsize_pix[plag_mask]/self.muang(Pz,Py))/self.sun_npix
+        self.fill_plage = np.nansum(Fsize_pix[plag_mask]/Pdata['mu_angle'])/self.sun_npix
 
         self.n_network = self.n_faculae-self.n_plage
         self.fill_network = self.fill_faculae-self.fill_plage
