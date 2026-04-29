@@ -56,6 +56,14 @@ type_list = list(sdo_file_types.keys())
 getNName = lambda key : key[0]+'map' if key!='dopplergram' else 'vmap'
 nname_list = [getNName(key) for key in sdo_file_types.keys()]
 
+def mjd2ymd(mjd):
+    yy,m,d = Time(mjd,format='mjd').isot.split('T')[0].split('-')
+    return yy[2:]+m+d
+
+def ymd2mjd(ymd):
+    ymd = str(ymd)
+    return Time(f'20{ymd[:2]}-{ymd[2:4]}-{ymd[4:]}').mjd
+
 def getOriginalSdoFileName(yyyymmdd,tstamp,file_type,tai_num=3,full_path=False):
     # Format information into SDO file name convention
     file_type = file_type.lower()
@@ -79,14 +87,15 @@ def getSdoFileName(yymmdd,tstamp,file_type,
         file_name =  os.path.join(sdo_dir,file_type.capitalize(),file_name)
     return file_name
 
-def downloadDay(ymd,save_dir,min_hr=0,max_hr=24,
-                cadence=12*u.minute,overwrite=False,
+def downloadObs(ymd,save_dir,min_hr=0,max_hr=23.9,
+                cadence=12*u.minute,
                 e_mail='lilylingzhao@uchicago.edu',
                 skip_tstamps=[]):
     day_mjd = Time(f'20{ymd[:2]}-{ymd[2:4]}-{ymd[4:]}',format='isot').mjd
     dmin, dmax = Time([day_mjd+min_hr/24, day_mjd+max_hr/24],format='mjd').isot
 
-    for key in type_list:
+    num_files = np.zeros(len(type_list))
+    for ikey,key in enumerate(type_list):
         matching_images = Fido.search(
             a.Time(dmin,dmax),        # time range in which to search for data
             a.jsoc.Series(sdo_file_types[key]), # list of data products to access
@@ -94,7 +103,13 @@ def downloadDay(ymd,save_dir,min_hr=0,max_hr=24,
             a.jsoc.Notify(e_mail)     # specify user
         )
 
+        num_files[ikey] = len(matching_images['jsoc'])
+
+        if num_files[ikey]==0:
+            return num_files
+
         # Check For Files That Already Exist
+        """ # Apparently this doesn't work anyway
         existing_files = []
         for irec,trec in enumerate(matching_images['jsoc']['T_REC']):
             date, time, _ = trec.split('_')
@@ -106,7 +121,8 @@ def downloadDay(ymd,save_dir,min_hr=0,max_hr=24,
             # If they exist, remove from object
             if tstamp in skip_tstamps or os.path.isfile(jsoc_name) or os.path.isfile(essp_name):
                 existing_files.append(irec)
-            matching_images['jsoc'].remove_row(existing_files)
+        matching_images['jsoc'].remove_rows(existing_files)
+        """
 
         # Download Files
         downloaded_files = Fido.fetch(matching_images,path=os.path.join(save_dir,
@@ -118,7 +134,7 @@ def downloadDay(ymd,save_dir,min_hr=0,max_hr=24,
             downloaded_files = Fido.fetch(downloaded_files)
             failed_files = downloaded_files.errors
             counter += 1
-        print(f'{day}, {key} Redos: {counter}')
+        print(f'{ymd}, {key} Redos: {counter}')
 
         # Rename all files
         dir_name = os.path.join(save_dir,key.capitalize())
@@ -126,6 +142,8 @@ def downloadDay(ymd,save_dir,min_hr=0,max_hr=24,
         for file in file_list:
             yyyymmdd, file_tstamp = os.path.basename(file).split('.')[2].split('_')[:2]
             os.rename(file,getSdoFileName(yyyymmdd[2:],file_tstamp,key,full_path=True))
+
+    return num_files
 
 def deleteDay(yymmdd,save_dir=sdo_dir):
     file_list = glob(save_dir,'*',f'{yymmdd}_*.fits')
@@ -546,7 +564,8 @@ class SDO_Obs(object):
 
     # =============================================================================
     # Save All Values
-    def save(self,save_file,save_dir=sdo_dir,save_regions=True,
+    def save(self,save_file,save_dir=sdo_dir,
+             save_regions=True,save_maps=False,
              existing_df=None):
         # Save Values
         df = pd.DataFrame({key:getattr(self,key,np.nan) for key in sdo_values},index=[0])
@@ -560,17 +579,20 @@ class SDO_Obs(object):
         # Save Regions if Requested
         if save_regions:
             # Spot Regions
-            np.save(os.path.join(save_dir,'Haywood','SpotMaps',
-                        f'{self.date_ymd}.{self.tstamp}_spotImag.npy'),
-                    self.spot_imag)
             pd.DataFrame(self.spot_dict).to_csv(os.path.join(save_dir,'Haywood','SpotProps',
                              f'{self.date_ymd}.{self.tstamp}_spotDict.csv'),index=False)
 
             # Plage Regions
+            pd.DataFrame(self.plag_dict).to_csv(os.path.join(save_dir,'Haywood','PlageProps',
+                             f'{self.date_ymd}.{self.tstamp}_plagDict.csv'),index=False)
+        if save_maps:
+            # Spot Regions
+            np.save(os.path.join(save_dir,'Haywood','SpotMaps',
+                        f'{self.date_ymd}.{self.tstamp}_spotImag.npy'),
+                    self.spot_imag)
+            # Plage Regions
             np.save(os.path.join(save_dir,'Haywood','FaculaeMaps',
                         f'{self.date_ymd}.{self.tstamp}_faclImag.npy'),
                     self.facl_imag)
-            pd.DataFrame(self.plag_dict).to_csv(os.path.join(save_dir,'Haywood','PlageProps',
-                             f'{self.date_ymd}.{self.tstamp}_plagDict.csv'),index=False)
         
         return df
