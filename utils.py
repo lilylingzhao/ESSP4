@@ -8,28 +8,38 @@ from astropy.time import Time
 import pandas as pd
 import seaborn as sns
 
+# =============================================================================
+# Relevant Directories and Default Files
 ceph_dir = '/Users/lilyzhao/Documents/ceph/'
 #ceph_dir = '/Volumes/Hasbrouck/ceph/'
-solar_dir = os.path.join(ceph_dir,'ESSP_Solar',)
+solar_dir = os.path.join(ceph_dir,'ESSP_Solar')
+# ESSP4 Data
+essp_dir = os.path.join(solar_dir,'ESSP4','Data','Training')
+# ESSP4 Code
+essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
+# CCF Masks
+mask_dir = os.path.join(ceph_dir,'CCF_Masks','ESPRESSO')
+# SDO Images and Values
 sdo_dir  = os.path.join(solar_dir,'SDO')
 sdo_dir  = os.path.join('/Volumes/Hasbrouck/ceph/','Solar','SDO',)
-mask_dir = os.path.join(ceph_dir,'CCF_Masks','ESPRESSO')
-essp_dir = os.path.join(solar_dir,'ESSP4','Data','Training')
-essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
-
+# Reformatted Submissions
 subm_dir = os.path.join(solar_dir,'ESSP4','Submissions')
+# Combined Submissions and Signals
+sgnl_dir = os.path.join(solar_dir,'ESSP4','Signals')
+# Kima Planet Fits
+kima_dir = os.path.join(sgnl_dir,'KimaFits')
 
-num_dset = 9
+# One Fit GP Model
+oneFit_file = os.path.join(solar_dir,'250109_oneFitModel.csv')
 
 # Default CCF Mask
 default_mask_file = os.path.join(mask_dir,'NEID_G2_telluricAdjusted.fits')
 #default_mask_file = os.path.join(mask_dir,'ESPRESSO_G2.fits')
 
-# One Fit GP Model
-oneFit_file = os.path.join(solar_dir,'250109_oneFitModel.csv')
-
 # =============================================================================
 # Useful Variables
+
+num_dset = 9
 
 # List of Instrument Names (and Grown Up Names)
 instruments = ['harpsn','harps','expres','neid']
