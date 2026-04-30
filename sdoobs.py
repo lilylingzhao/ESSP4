@@ -29,6 +29,8 @@ from   SolAster.tools.plotting_funcs    import hmi_plot
 # =============================================================================
 # Values to be calculated (organized by associated function)
 
+sdo_email = 'lilylingzhao@uchicago.edu'
+
 sdo_values = [
     'date_ymd', 'tstamp', 'date_mjd', # Record Keeping
     'f_bright', 'f_spot', 'f',        # getFillingFactors()
@@ -96,8 +98,7 @@ def getSdoFileName(yymmdd,tstamp,file_type,
 
 def downloadObs(ymd,save_dir,min_hr=0,max_hr=23.9,
                 cadence=12*u.minute,
-                e_mail='lilylingzhao@uchicago.edu',
-                skip_tstamps=[]):
+                e_mail=sdo_email):
     day_mjd = Time(f'20{ymd[:2]}-{ymd[2:4]}-{ymd[4:]}',format='isot').mjd
     dmin, dmax = Time([day_mjd+min_hr/24, day_mjd+max_hr/24],format='mjd').isot
 
@@ -111,26 +112,9 @@ def downloadObs(ymd,save_dir,min_hr=0,max_hr=23.9,
         )
 
         num_files[ikey] = len(matching_images['jsoc'])
-
         if num_files[ikey]==0:
             return num_files
-
-        # Check For Files That Already Exist
-        """ # Apparently this doesn't work anyway
-        existing_files = []
-        for irec,trec in enumerate(matching_images['jsoc']['T_REC']):
-            date, time, _ = trec.split('_')
-            # Get saved file names
-            ymd = date.replace('.','')[2:]
-            tstamp = time.replace(':','')
-            jsoc_name = getOriginalSdoFileName('20'+ymd,tstamp,key,tai_num=3,full_path=True)
-            essp_name = getSdoFileName(ymd,tstamp,key,full_path=True)
-            # If they exist, remove from object
-            if tstamp in skip_tstamps or os.path.isfile(jsoc_name) or os.path.isfile(essp_name):
-                existing_files.append(irec)
-        matching_images['jsoc'].remove_rows(existing_files)
-        """
-
+        
         # Download Files
         downloaded_files = Fido.fetch(matching_images,path=os.path.join(save_dir,
                                           key.capitalize(),'{file}'))
