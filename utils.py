@@ -45,7 +45,7 @@ instruments = ['harpsn','harps','expres','neid']
 inst_names = ['HARPS-N','HARPS','EXPRES','NEID']
 num_inst = len(instruments)
 
-ts_dict = {inst:pd.read_csv(os.path.join(solar_dir,f'{inst}_drp.csv')).loc[:,
+ts_dict = {inst:pd.read_csv(os.path.join(essp_dir,f'{inst}_drp.csv')).loc[:,
            ['Time [MJD]','RV [m/s]','RV Err. [m/s]','Exp. Time [s]']].to_numpy().T for inst in instruments}
 
 # Instrument Colors a la ESSP #
@@ -87,7 +87,7 @@ iccf_offset = {
 }
 
 pd.DataFrame.from_dict(iccf_offset,orient='index',columns=['offset']).to_csv(
-    os.path.join(solar_dir,'instrument_offsets_iccf.csv'),header=False)
+    os.path.join(essp_dir,'instrument_offsets_iccf.csv'),header=False)
 
 # =============================================================================
 # Submission Information
@@ -144,7 +144,7 @@ def getHarpsNoBlazeFile(file_name):
 def spec_basename2FullPath(file_name):
     inst = fileName2Inst(file_name)
     inst_fullName = instrument_nickname2Fullname(inst)
-    return os.path.join(solar_dir,'Spectra',inst_fullName + ('_wBlaze' if 'BLAZE' in file_name else ''),
+    return os.path.join(essp_dir,'Spectra',inst_fullName + ('_wBlaze' if 'BLAZE' in file_name else ''),
                         file_name)
 
 def spec_spec2ccf(spec_file):
@@ -156,7 +156,7 @@ def spec_spec2ccf(spec_file):
     if inst=='neid':
         ccf_file = spec_file
     elif inst=='expres':
-        ccf_file = os.path.join(solar_dir,'CCFs','EXPRES',os.path.basename(spec_file))
+        ccf_file = os.path.join(essp_dir,'CCFs','EXPRES',os.path.basename(spec_file))
     else:
         base_file = os.path.basename(spec_file).replace('_BLAZE','')
         if inst=='harpsn':
@@ -164,13 +164,13 @@ def spec_spec2ccf(spec_file):
         else:
             base_file = base_file[2:].replace('_S2D_A','_ccf_G2_A')
         
-        ccf_file = os.path.join(solar_dir,'CCFs',instrument_nickname2Fullname(inst),base_file)
+        ccf_file = os.path.join(essp_dir,'CCFs',instrument_nickname2Fullname(inst),base_file)
     return ccf_file
 
 def standardSpec_basename2FullPath(file_name):
     name_part_list = os.path.basename(file_name).split('_')
     dset_name = name_part_list[0].split('.')[0]
-    full_name = os.path.join(essp_dir,
+    full_name = os.path.join(data_dir,
                              'Validation' if 'v' in name_part_list else 'Training',
                               dset_name,'Spectra',os.path.basename(file_name))
     
