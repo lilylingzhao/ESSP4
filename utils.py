@@ -11,26 +11,25 @@ import seaborn as sns
 # =============================================================================
 # Relevant Directories and Default Files
 ceph_dir = '/Users/lilyzhao/Documents/ceph/'
-#ceph_dir = '/Volumes/Hasbrouck/ceph/'
-solar_dir = os.path.join(ceph_dir,'ESSP_Solar')
+ceph_dir = '/Volumes/Hasbrouck/ceph/'
+essp_dir = os.path.join(ceph_dir,'ESSP','ESSP4')
 # ESSP4 Data
-essp_dir = os.path.join(solar_dir,'ESSP4','Data','Training')
+data_dir = os.path.join(essp_dir,'Data')
 # ESSP4 Code
 essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
 # CCF Masks
 mask_dir = os.path.join(ceph_dir,'CCF_Masks','ESPRESSO')
 # SDO Images and Values
-sdo_dir  = os.path.join(solar_dir,'SDO')
-sdo_dir  = os.path.join('/Volumes/Hasbrouck/ceph/','Solar','SDO',)
+sdo_dir  = os.path.join(ceph_dir,'Solar','SDO')
 # Reformatted Submissions
-subm_dir = os.path.join(solar_dir,'ESSP4','Submissions')
+subm_dir = os.path.join(essp_dir,'Submissions')
 # Combined Submissions and Signals
-sgnl_dir = os.path.join(solar_dir,'ESSP4','Signals')
+sgnl_dir = os.path.join(essp_dir,'Signals')
 # Kima Planet Fits
 kima_dir = os.path.join(sgnl_dir,'KimaFits')
 
 # One Fit GP Model
-oneFit_file = os.path.join(solar_dir,'250109_oneFitModel.csv')
+oneFit_file = os.path.join(sgnl_dir,'250109_oneFitModel.csv')
 
 # Default CCF Mask
 default_mask_file = os.path.join(mask_dir,'NEID_G2_telluricAdjusted.fits')
