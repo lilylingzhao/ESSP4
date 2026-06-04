@@ -16,13 +16,13 @@ import pandas as pd
 
 from kepler import getRV, getRV_K, getMfromK
 
-from utils import solar_dir, ceph_dir
+from utils import essp_dir, ceph_dir
 
 wave_diff_log = 1.47149502e-06 # Determined in 250331_telluricWavelength.ipynb
 wave_min, wave_max = 3787, 11053
 y_shift = 0.002
 
-default_tell_file = os.path.join(solar_dir,'telluricMask.fits')
+default_tell_file = os.path.join(essp_dir,'telluricMask.fits')
 default_tapas_file = os.path.join(ceph_dir,'250425_telluric','kpno_telluric_16.0_51.0.fits')
 
 # =============================================================================
@@ -49,7 +49,7 @@ def getSeleniteModel(file_list):
     full_path = os.path.basename(file_list[0])!=file_list[0]
     
     # Open an example file
-    example_file = file_list[0] if full_path else os.path.join(solar_dir,'EXPRES',file_list[0])
+    example_file = file_list[0] if full_path else os.path.join(essp_dir,'Spectra','EXPRES',file_list[0])
     hdus = fits.open(example_file)
     tell = hdus[1].data['tellurics'].copy()
     hdus.close()
@@ -58,7 +58,7 @@ def getSeleniteModel(file_list):
     # Load in wavelengths, telluric models, and blaze functions
     waves, tells, blazs = np.empty((3,num_obs,num_ord,num_pix))
     for ifile,file in enumerate(file_list):
-        hdus = fits.open(file if full_path else os.path.join(solar_dir,'EXPRES',file_list[0]))
+        hdus = fits.open(file if full_path else os.path.join(essp_dir,'Spectra','EXPRES',file_list[0]))
         waves[ifile] = hdus[1].data['wavelength'].copy()
         tells[ifile] = hdus[1].data['tellurics'].copy()
         blazs[ifile] = hdus[1].data['blaze'].copy()

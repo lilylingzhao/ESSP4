@@ -10,11 +10,13 @@ import seaborn as sns
 
 # =============================================================================
 # Relevant Directories and Default Files
-ceph_dir = '/Users/lilyzhao/Documents/ceph/'
 ceph_dir = '/Volumes/Hasbrouck/ceph/'
+if not os.path.isdir(ceph_dir):
+    ceph_dir = '/Users/lilyzhao/Documents/ceph/'
 essp_dir = os.path.join(ceph_dir,'ESSP','ESSP4')
 # ESSP4 Data
 data_dir = os.path.join(essp_dir,'Data')
+training_dir = os.path.join(essp_dir,'Data','Training')
 # ESSP4 Code
 essp4_dir = '/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/'
 # CCF Masks
@@ -102,10 +104,18 @@ num_meth, num_team = len(meth_list), len(team_list)
 def getSubmittedRVs(method,dset):
     team = meth2team_dict[method]
     results_dir = os.path.join(subm_dir,team,method,'results')
-    return pd.read_csv(os.path.join(results_dir,f'DS{dset}_{team}_{method}_results.csv'))
+    results_file = os.path.join(results_dir,f'DS{dset}_{team}_{method}_results.csv')
+    return pd.read_csv(results_file) if os.path.isfile(results_file) else None
 
 # =============================================================================
 # Instrument/File Names
+
+def leadingZeros(val,tot_len=6):
+    # Add any needed zeros to beginning of tstamp
+    val = str(val)
+    while len(val)<tot_len:
+        val = '0'+val
+    return val
 
 def instrument_nickname2Fullname(inst):
     matched_name = np.array(inst_names)[np.array(instruments)==inst]

@@ -258,9 +258,9 @@ def selectValidationSet(data_df, mode, validation_amount):
 # =============================================================================
 # Spectral File Standardization
 
-harpsn_dace = pd.read_csv(os.path.join(solar_dir,'harpsn_dace.csv')).set_index('file_root')
+harpsn_dace = pd.read_csv(os.path.join(essp_dir,'harpsn_dace.csv')).set_index('file_root')
 harpsn_corr = ['berv_bary_to_helio','rv_diff_extinction','rv_optimised_corr']
-harps_corr = pd.read_csv(os.path.join(solar_dir,'Indicators',
+harps_corr = pd.read_csv(os.path.join(essp_dir,'Indicators',
                          'harps_indicators_iCCF_corrected.csv')).set_index('File Name')
 
 def readL2(file_name,pad_orders=False):
@@ -377,9 +377,9 @@ key_funcs = {
     'obslat'   : (['harpsn'],
                   lambda geolat : dms2deg(geolat)),
 }
-hjd_dict = {'harps':pd.read_csv(os.path.join(solar_dir,'harps_drp.csv'),
+hjd_dict = {'harps':pd.read_csv(os.path.join(essp_dir,'harps_drp.csv'),
                                 usecols=['File Name','Time [MJD]']).set_index('File Name'),
-            'harpsn':pd.read_csv(os.path.join(solar_dir,'harpsn_drp.csv'),
+            'harpsn':pd.read_csv(os.path.join(essp_dir,'harpsn_drp.csv'),
                                  usecols=['File Name','Time [MJD]']).set_index('File Name')}
 def standardizeHeader(file_name,standard_name=None):
     """Read header and change to standardized version

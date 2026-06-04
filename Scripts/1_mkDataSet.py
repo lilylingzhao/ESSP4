@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 import sys
 sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
-from utils import solar_dir, essp_dir, instruments, mon_min, drp_offset
+from utils import essp_dir, instruments, mon_min, drp_offset, leadingZeros
 from data import *
 from solarContinuum import solarCont
 from planetInjection import getRvTimeSeries, injectPlanet
@@ -136,10 +136,10 @@ def getStandardFiles(ds_df,data_set):
     for i in range(len(ds_df)):
         inst = inst_list[i]
         if train_mask[i]:
-            files.append(f'{data_set}.{padIobs(tiobs)}_spec_{inst}.fits')
+            files.append(f'{data_set}.{leadingZeros(tiobs,tot_len=3)}_spec_{inst}.fits')
             tiobs += 1
         else:
-            files.append(f'{data_set}.{padIobs(viobs)}_v_spec_{inst}.fits')
+            files.append(f'{data_set}.{leadingZeros(viobs,tot_len=3)}_v_spec_{inst}.fits')
             viobs += 1
     return files
 
@@ -148,7 +148,7 @@ def getObs(data_set,num_obs,num_day=None,target_expt=0,
     ### Select Observations for Data Set
     df_list = []
     for iinst,inst in enumerate(instruments):
-        inst_df = pd.read_csv(os.path.join(solar_dir,f'{inst}_drp.csv'))
+        inst_df = pd.read_csv(os.path.join(essp_dir,f'{inst}_drp.csv'))
         inst_df['RV [m/s]'] = inst_df['RV [m/s]']-drp_offset[inst]
         
         # Select Observations

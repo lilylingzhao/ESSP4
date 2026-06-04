@@ -11,7 +11,7 @@ from skimage.draw import ellipse as circle
 import pandas as pd
 from tqdm import tqdm
 
-from utils import sdo_dir
+from utils import sdo_dir, leadingZeros
 
 import sunpy.map
 from sunpy.net import Fido
@@ -65,13 +65,6 @@ def mjd2ymd(mjd):
 def ymd2mjd(ymd):
     ymd = str(ymd)
     return Time(f'20{ymd[:2]}-{ymd[2:4]}-{ymd[4:]}').mjd
-
-def leadingZeros(val,tot_len=6):
-    # Add any needed zeros to beginning of tstamp
-    val = str(val)
-    while len(val)<tot_len:
-        val = '0'+val
-    return val
 
 def getOriginalSdoFileName(yyyymmdd,tstamp,file_type,tai_num=3,full_path=False):
     # Format information into SDO file name convention

@@ -177,7 +177,7 @@ def fit_rv(v_grid, ccf, e_ccf, vrange=12, sigma_v=3, fit_opts=fit_opts,
 # =============================================================================
 # CCF Pipeline (Spec File -> CCF File)
 
-weight_dict = pd.read_csv(os.path.join(solar_dir,'order_weights.csv')).set_index('echelle')
+weight_dict = pd.read_csv(os.path.join(essp4_dir,'order_weights.csv')).set_index('echelle')
 
 def ccf(spec_file,use_iccf=False,
         cont_norm=False,weight=True,**kwargs):
@@ -227,8 +227,18 @@ def ccf(spec_file,use_iccf=False,
     
     if weight:
         for iord,nord in enumerate(orders):
-            ccfs[iord] = ccfs[iord]/np.nanmax(ccfs[iord])*weight_dict.at[nord,inst]
-            e_ccfs[iord] = e_ccfs[iord]/np.nanmax(ccfs[iord])*weight_dict.at[nord,inst]
+            # Calculate Order Weight
+            if np.sum(np.isfinite(ccfs[iord]))>0:
+                ccf_nord_wght = np.nanmax(ccfs[iord])*weight_dict.at[nord,inst]
+            else: # 0 For all Nan Orders
+                ccf_nord_wght = 0
+                
+            if ccf_nord_wght>0:
+                ccfs[iord]   =   ccfs[iord]/ccf_nord_wght
+                e_ccfs[iord] = e_ccfs[iord]/ccf_nord_wght
+            else: # Don't bother if weight is zero
+                ccfs[iord]   = np.nan
+                e_ccfs[iord] = np.nan
     return time, v_grid, ccfs, e_ccfs, orders
     
 def ccfFit(v_grid, ccfs, e_ccfs, orders, sample_factor=1,**kwargs):

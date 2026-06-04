@@ -4,14 +4,14 @@ from tqdm import tqdm
 
 import sys
 sys.path.append('/Users/lilyzhao/Documents/Employment/ESSP/4SolarTests/ESSP4/')
-from utils import solar_dir, instruments
+from utils import essp_dir_dir, instruments
 from planetInjection import *
 
 def main():
     
     parser = argparse.ArgumentParser(description='Generate a Telluric Mask')
     
-    parser.add_argument('-file-name',type=str,default=os.path.join(solar_dir,'telluricMask.fits'),
+    parser.add_argument('-file-name',type=str,default=os.path.join(essp_dir,'telluricMask.fits'),
                         help='Mark SELENITE values under this value as telluric')
     parser.add_argument('-telluric-cut',type=float,default=.99,
                         help='Mark SELENITE values under this value as telluric')
@@ -30,7 +30,7 @@ def main():
         return
     
     # Read in EXPRES info
-    expres_df = pd.read_csv(os.path.join(solar_dir,'expres_drp.csv'))
+    expres_df = pd.read_csv(os.path.join(essp_dir,'expres_drp.csv'))
 
     # Define Uniform Wavlength Grid
     x_shift = y_shift/wave_diff_log
