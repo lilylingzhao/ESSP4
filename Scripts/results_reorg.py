@@ -8,11 +8,10 @@ import pandas as pd
 from tqdm import tqdm
 
 # Replace with local pointing to box download
-#essp_data_dir = '/Volumes/Hasbrouck/ceph/ESSP_Solar/4_DataSets'
-essp_data_dir = '/Users/lilyzhao/Documents/ceph/ESSP_Solar/ESSP4/Data'
-box_dir = '/Users/lilyzhao/Documents/ceph/ESSP_Solar/ESSP4/Box/Submissions'
+essp_data_dir = '/Users/lilyzhao/Documents/ceph/ESSP/ESSP4/Data'
+box_dir = '/Users/lilyzhao/Documents/ceph/ESSP/ESSP4/Box/Submissions'
 
-save_dir = '/Users/lilyzhao/Documents/ceph/ESSP_Solar/ESSP4/Submissions'
+save_dir = '/Users/lilyzhao/Documents/ceph/ESSP/ESSP4/Submissions'
 
 # Remove Any Existing Submissions Folder
 # (There's no reason not to start from scratch, right?)
@@ -204,7 +203,7 @@ for dset in range(1,10):
                     og_file_name = f'DS{dset}_{team_name}_1dGP-{ind_dict[ind]}-{fit.lower()}_{sub}.csv'
                     og_file = os.path.join(box_dir,'GP',f'signal_{sig}',fit.lower(),og_file_name)
                     if not os.path.isfile(og_file):
-                        print(f'Missing: {og_file_name}')
+                        print(f'Missing: {method_name} {sub}')
                         continue
                     # Generate reorganized file name
                     file_name = f'DS{dset}_{team_name}_{method_name}_{sub}.csv'
@@ -375,6 +374,36 @@ for og_file in file_list:
 file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
 for og_file in file_list:
     shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+
+
+# =============================================================================
+# PSU
+
+team_name = 'PSU'
+print(Time.now().isot.split('T')[-1],team_name)
+method = 'Scalpels'
+makeTree(team_name,method,sub_folders=['results','planetFit'])
+
+for ds in range(1,10):
+    for sub in ['results','planetFit']:
+        file_name = f'DS{ds}_{team_name}_{method}_{sub}.csv'
+        og_file = os.path.join(box_dir,team_name,method,file_name)
+        if not os.path.isfile(og_file):
+            print(f'Missing: {og_file_name}')
+            continue
+        file = os.path.join(save_dir,team_name,method,sub,file_name)
+
+        if sub=='results':
+            # Add file names and sort by file names
+            df = addFileNames(og_file)
+            df.to_csv(file,index=False)
+        else:
+            assert sub=='planetFit'
+            df_list = []
+            pln_df_all = pd.read_csv(og_file)
+            for inst in ['harpsn','harps','expres','neid']:
+                df_list.append(addPlanetIndexing(pln_df_all[pln_df_all['Instrument']==inst]))
+            pd.concat(df_list).to_csv(file,index=False)
 
 
 # =============================================================================
