@@ -80,7 +80,7 @@ def main():
     
     print('% Tellurics',np.sum(tell_mask)/tell_mask.size)
     
-    # Save CCF Info
+    # Save Mask Info
     tell_head = fits.Header()
     tell_head['maskdate'] = (Time.now().fits, 'Time mask was generated')
     tell_head['sln-tcut'] = (args.telluric_cut, 'SELENITE telluric cut')

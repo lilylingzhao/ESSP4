@@ -53,10 +53,10 @@ def addPlanetIndexing(planet_df):
     if 'planet' not in planet_df:    
         planet_df.insert(0,'planet',[*'bcdefghijklmnop'[:len(planet_df)]])
 
-    # Index by K
-    K_sort = planet_df['K [m/s]']
-    planet_df.insert(planet_df.columns.get_loc('K [m/s]')+1,'K_sort',
-                     len(planet_df)-np.argsort(K_sort)-1)
+    # Index by Period
+    P_sort = planet_df['P [d]']
+    planet_df.insert(planet_df.columns.get_loc('P [d]')+1,'P_sort',
+                     len(planet_df)-np.argsort(P_sort)-1)
     return planet_df
 
 # =============================================================================
@@ -185,7 +185,9 @@ method = '1dGP'
 ind_list = ['CaII','Contrast','FWHM','Ha','BIS']
 ind_dict = dict(zip(ind_list,['CAII','CONT','FWHM','HA','BIS'])) # map to original
 fit_list = ['Circular','Keplerian']
-method_list = np.concatenate([[f'{method}{i}{f}' for i in ind_list] for f in fit_list])
+signals = [*'bcd']
+getGPMethod = lambda ind, fit, sig : f'{method}{ind}{fit}{sig}'
+method_list = np.array([[[getGPMethod(i,f,s) for i in ind_list] for f in fit_list]for s in signals]).flatten()
 types_of_subs = ['results',
                  'planetFit','planetFitPosteriors',
                  'hyperparameters','hyperparametersPosteriors']
@@ -195,34 +197,36 @@ makeTree(team_name,method_list,sub_folders=types_of_subs)
 for dset in range(1,10):
     for fit in fit_list:
         for ind in ind_dict.keys():
-            all_files = glob(os.path.join(box_dir,'GP',fit.lower(),
-                                         f'DS{dset}_{team_name}_1dGP-{ind_dict[ind]}-{fit.lower()}_*.csv'))
-            if len(all_files)<len(types_of_subs):
-                continue
-            for sub in types_of_subs:
-                # Generate the original and reorganized file names
-                og_file_name = f'DS{dset}_{team_name}_1dGP-{ind_dict[ind]}-{fit.lower()}_{sub}.csv'
-                og_file = os.path.join(box_dir,'GP',fit.lower(),og_file_name)
-                file_name = f'DS{dset}_{team_name}_1dGP{ind}{fit}_{sub}.csv'
-                file = os.path.join(save_dir,team_name,f'1dGP{ind}{fit}',sub,file_name)
+            for sig in signals:
+                method_name = getGPMethod(ind,fit,sig)
+                for sub in types_of_subs:
+                    # Generate the original file names
+                    og_file_name = f'DS{dset}_{team_name}_1dGP-{ind_dict[ind]}-{fit.lower()}_{sub}.csv'
+                    og_file = os.path.join(box_dir,'GP',f'signal_{sig}',fit.lower(),og_file_name)
+                    if not os.path.isfile(og_file):
+                        print(f'Missing: {og_file_name}')
+                        continue
+                    # Generate reorganized file name
+                    file_name = f'DS{dset}_{team_name}_{method_name}_{sub}.csv'
+                    file = os.path.join(save_dir,team_name,method_name,sub,file_name)
 
-                if sub in ['planetFitPosteriors','hyperparameters','hyperparametersPosteriors']:
-                    # Just move, no edits necessary!
-                    shutil.copy(og_file,file)
-                elif sub=='planetFit':
-                    # Add K index
-                    addPlanetIndexing(pd.read_csv(og_file)).to_csv(file,index=False)
-                else:
-                    assert sub=='results'
-                    # Add file names and sort by file names
-                    df = addFileNames(og_file)
-                    # Make instruments lower case
-                    df['Instrument'] = [i.lower() for i in df['Instrument']]
-                    # Remove units from all columns
-                    cols2skip = ['Standard File Name','Time [eMJD]','Instrument']
-                    col_dict = {c:c if c in cols2skip else c.split(' ')[0] for c in df.columns}
-                    df = df.rename(columns=col_dict)
-                    df.to_csv(file,index=False)
+                    if sub in ['planetFitPosteriors','hyperparameters','hyperparametersPosteriors']:
+                        # Just move, no edits necessary!
+                        shutil.copy(og_file,file)
+                    elif sub=='planetFit':
+                        # Add P index
+                        addPlanetIndexing(pd.read_csv(og_file)).to_csv(file,index=False)
+                    else:
+                        assert sub=='results'
+                        # Add file names and sort by file names
+                        df = addFileNames(og_file)
+                        # Make instruments lower case
+                        df['Instrument'] = [i.lower() for i in df['Instrument']]
+                        # Remove units from all columns
+                        cols2skip = ['Standard File Name','Time [eMJD]','Instrument']
+                        col_dict = {c:c if c in cols2skip else c.split(' ')[0] for c in df.columns}
+                        df = df.rename(columns=col_dict)
+                        df.to_csv(file,index=False)
 
 # Copy Auxiliary Files
 file_list = glob(os.path.join(box_dir,'GP',f'{team_name}*'))
@@ -371,6 +375,7 @@ for og_file in file_list:
 file_list = glob(os.path.join(box_dir,team_name,f'{team_name}*'))
 for og_file in file_list:
     shutil.copy(og_file,os.path.join(save_dir,team_name,os.path.basename(og_file)))
+
 
 # =============================================================================
 # Sidera
