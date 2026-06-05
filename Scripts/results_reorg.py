@@ -34,7 +34,7 @@ def makeTree(team_name,method_list,sub_folders=['results']):
 def addFileNames(results_file,t_tol=5/60/60/24):
     # 5 second tolerance in case BJD is used
     
-    results_df = pd.read_csv(results_file)
+    results_df = pd.read_csv(results_file).rename(columns={'instrument':'Instrument'})
     assert 'Standard File Name' not in results_df.columns
 
     ds = os.path.basename(results_file).split('_')[0]
@@ -396,6 +396,7 @@ for ds in range(1,10):
         if sub=='results':
             # Add file names and sort by file names
             df = addFileNames(og_file)
+            df.rename(columns={f'Ind. {i}':f'Ind{i}'for i in range(1,5)},inplace=True)
             df.to_csv(file,index=False)
         else:
             assert sub=='planetFit'
