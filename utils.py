@@ -40,7 +40,8 @@ default_mask_file = os.path.join(mask_dir,'NEID_G2_telluricAdjusted.fits')
 # =============================================================================
 # Useful Variables
 
-num_dset = 9
+dset_list = range(1,10)
+num_dset = len(dset_list)
 
 # List of Instrument Names (and Grown Up Names)
 instruments = ['harpsn','harps','expres','neid']
@@ -217,6 +218,20 @@ def padOrders(og_arr,inst):
 def unpadOrders(og_arr):
     isord = np.sum(np.isfinite(og_arr),axis=1)>0
     return og_arr[isord]
+
+def iorder2echelle(iord,inst):
+    if inst == 'harps':
+        ipad = iord + (1 if iord < 45 else 2)
+    elif inst in ['harpsn', 'harps-n']:
+        ipad = iord + 4
+    elif inst == 'expres':
+        ipad = iord + 1
+    elif inst == 'neid':
+        ipad = iord
+    else:
+        assert False, print(f'Instrument name "{inst}" not recognized')
+    order = 161 - ipad
+    return order
 
 # =============================================================================
 # Standardizing Relative/Echelle Order

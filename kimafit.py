@@ -10,30 +10,30 @@ import kima
 from kima import RVData, RVmodel, distributions
 
 from utils import *
+from planetInjection import getRvTimeSeries
 
-essp_dir = '/Users/lilyzhao/Documents/ceph/ESSP_Solar/ESSP4'
-kima_dir = os.path.join(essp_dir,'KimaFits')
+# Define trend degree
+kima_trend_dict = {dset:3 if dset in [4,8] else 0 for dset in range(1,10)}
 
-# Specify a scratch directory to store temporary, Kima-standard data files
-scratch_dir = os.path.join(kima_dir,'Scratch')
-if not os.path.exists(scratch_dir):
-    os.makedirs(scratch_dir)
+# =============================================================================
+# Kima Fitting Files
 
-### STILL NEED TO FIGURE OUT SOMETHING TO DO IF ERRORS AREN'T RETURNED FOR THE SUBMITTED RVS
-
-def getKimaDataFiles(data_file,
-                     save_dir=scratch_dir,
-                     submission=True,
+def genKimaDataFiles(essp_data_file,save_dir,
+                     t_key='Time [eMJD]',v_key='RV [m/s]',e_key='RV Err. [m/s]',
                      separate_insts=True):
-    df = pd.read_csv(data_file)
-    t_key = 'Time [eMJD]'
-    v_key, e_key = ['RV_C','eRV_C'] if submission else ['RV [m/s]','RV Err. [m/s]']
+    df = pd.read_csv(essp_data_file)
+    m = df[v_key].notna() & df[e_key].notna()
+    if np.sum(m)==0:
+        return []
+    df = df.copy()[m]
 
     if separate_insts:
         file_list = []
         for inst in instruments:
             save_file = os.path.join(save_dir,f'RVData_{inst}.rdb')
             m_inst = df['Instrument']==inst
+            if np.sum(m_inst)==0:
+                continue
             np.savetxt(save_file, df.loc[m_inst,[t_key,v_key,e_key]].to_numpy(),
                        header='time rv rv_err', comments='', fmt='%f %f %5.3f')
             file_list.append(save_file)
@@ -44,26 +44,105 @@ def getKimaDataFiles(data_file,
         file_list = save_file        
     return file_list
 
-def kimFit(data_file,save_file,
-           max_npl=3,prior_dict={},
-           steps=100_000,num_threads=8):
-    file_list = getKimaDataFiles(data_file)
-
-    # Read in Data
+def kimaFit(files,save_file=None,
+            max_npl=3,prior_dict={},
+            trend_deg=3,t_baseline=1,
+            steps=100_000,num_threads=4,print_thin=200,
+            **kwargs):
     D = RVData(files, skip=1)
 
     # Initialize Model
-    model = RVmodel(fix=False, npmax=max_npl, data=D)
+    model = RVmodel(fix=False, npmax=max_npl, data=D, **kwargs)
+    if trend_deg>0: # introduce a polynomial fit
+        model.trend = True
+        model.degree = trend_deg
+    if t_baseline!=1: # extend prior for orbital periods by time baseline
+        model.conditional.Pprior = distributions.LogUniform(1, t_baseline*D.get_timespan())
 
     # Change Priors
     if len(prior_dict)>0:
-        print("?")
+        # I don't think this will actually work for most priors
+        for key in prior_dict.keys():
+            setattr(model.conditional,key,prior_dict[key])
     
     # Run the Model
-    kima.run(model, steps=steps, num_threads=num_threads, print_thin=200)
+    kima.run(model, steps=int(steps), num_threads=int(num_threads), print_thin=int(print_thin))
 
     # Load the Result
     res = kima.load_results(model)
-    res.save_pickle(filename=save_file)
+    if save_file is not None:
+        res.save_pickle(filename=save_file)
 
     return model, res
+
+def posteriorSampleDataFrame(file,save_file=None):
+    # Get Column Names
+    f = open(file,'r')
+    col_names = f.readline().lstrip('#').strip().split()
+    f.close()
+    # Combine into Data Frame
+    df = pd.read_csv(file, sep=r'\s+', comment='#', names=col_names)
+    if save_file is not None:
+        df.to_csv(save_file,index=False)
+    return df
+
+
+# =============================================================================
+# Functions for Testing Kima Performance
+
+def genKimaTestData(dset,kima_data_dir,err=None,rand_seed=None):
+    # Generate Data
+    dset_df = pd.read_csv(os.path.join(data_dir,'Training',f'DS{dset}',f'DS{dset}_timeSeries.csv'))
+    t = dset_df['Time [eMJD]']
+    # Generate RVs
+    param_file = os.path.join(essp_dir,'SuperSecretPlanets',f'dataset_seq_{dset}.csv')
+    v = getRvTimeSeries(t,param_file,host_mass=1)
+    # Add Errors
+    if err is None: # Use given errors
+        e = dset_df['RV Err. [m/s]']
+    else:
+        e = np.zeros_like(v)+err
+    np.random.seed(rand_seed)
+    v += np.random.randn(len(t))*e
+    
+    # Write to File
+    data_file = os.path.join(kima_data_dir,'testCase.rdb')
+    np.savetxt(data_file, list(zip(t,v,e)),
+               header='time rv rv_err', comments='', fmt='%f %f %5.3f')
+    return data_file
+
+
+# =============================================================================
+# Functions for Collecting Kima Results
+
+kimaOrb_2essp = {'K':'K [m/s]','P':'P [d]','ecc':'e','w':'w [deg]','phi':'phi [deg]'}
+smryVals = ['mean','std','median','neg_sigma','pos_sigma']
+
+def getKimaValDict(smry_df,key):
+    essp_key = kimaOrb_2essp[key[:-1]] if key[:-1] in kimaOrb_2essp.keys() else key
+    key_dict = {}
+    for val in smryVals:
+        key_dict[essp_key + f' {val}'] = smry_df[key][val]
+    return key_dict
+
+def getSysDf(posteriors_df):
+    # Prep DF of Summary Values
+    smry_df = posteriors_df.describe(percentiles=[0.158,0.5,0.841]).T.rename(columns={'50%':'median'})
+    smry_df['neg_sigma'] = smry_df['median']-smry_df['15.8%']
+    smry_df['pos_sigma'] = smry_df['84.1%']-smry_df['median']
+    smry_df = smry_df.T
+
+    # Organize into a Single DF for System
+    plnt_list = []
+    for npln in range(3):
+        plnt_dict = {'planet':[*'bcd'][npln]}
+        for kima_key in smry_df.columns:
+            if kima_key[:-1] in kimaOrb_2essp.keys(): # Is a planet parameter
+                if int(kima_key[-1])!=npln:
+                    continue
+            plnt_dict |= getKimaValDict(smry_df,kima_key)
+        plnt_list.append(plnt_dict)
+    sys_df = pd.DataFrame(plnt_list)
+    sys_df['P_sort'] = np.argsort(sys_df['P [d] mean'])
+
+    return sys_df
