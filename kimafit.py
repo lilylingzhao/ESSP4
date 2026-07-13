@@ -18,9 +18,19 @@ kima_trend_dict = {dset:3 if dset in [4,8] else 0 for dset in range(1,10)}
 # =============================================================================
 # Kima Fitting Files
 
+def binByDay(t,v,e):
+    tint = t.astype(int)
+    tbin, vbin, ebin = np.zeros((3,len(tint)))
+    for i,it in enumerate(tint):
+        m = tint==it
+        tbin[i] = np.median(t[m])
+        vbin[i] = np.average(v[m],w=1/e[m])
+        ebin[i] = np.sqrt(1/np.sum(1/e[m]**2))
+    return tbin, vbin, ebin
+
 def genKimaDataFiles(essp_data_file,save_dir,
                      t_key='Time [eMJD]',v_key='RV [m/s]',e_key='RV Err. [m/s]',
-                     separate_insts=True):
+                     separate_insts=True,bin_by_day=False):
     df = pd.read_csv(essp_data_file)
     m = df[v_key].notna() & df[e_key].notna()
     if np.sum(m)==0:
@@ -34,12 +44,27 @@ def genKimaDataFiles(essp_data_file,save_dir,
             m_inst = df['Instrument']==inst
             if np.sum(m_inst)==0:
                 continue
-            np.savetxt(save_file, df.loc[m_inst,[t_key,v_key,e_key]].to_numpy(),
+            time, rvel, errs = df.loc[m_inst,[t_key,v_key,e_key]].to_numpy().T
+            if bin_by_day:
+                time, rvel, errs = binByDay(time, rvel, errs)
+            np.savetxt(save_file, np.array([time, rvel, errs]).T),
                        header='time rv rv_err', comments='', fmt='%f %f %5.3f')
             file_list.append(save_file)
     else:
         save_file = os.path.join(save_dir,f'RVData.rdb')
-        np.savetxt(save_file, df.loc[:,[t_key,v_key,e_key]].to_numpy(),
+        time, rvel, errs = df.loc[:,[t_key,v_key,e_key]].to_numpy().T
+        if bin_by_day:
+            tall, vall, eall = [],[],[]
+            for inst in instruments:
+                m = df['Instrument']==inst
+                t,v,e = binByDay(time[m], rvel[m], errs[m])
+                tall.append(t)
+                vall.append(v)
+                eall.append(e)
+            tall, vall, eall = np.concatenate(tall), np.concatenate(vall), np.concatenate(eall)
+            tsort = np.argsort(tall)
+            time, rvel, errs = tall[tsort], vall[tsort], eall[tsort]
+        np.savetxt(save_file, np.array([time, rvel, errs]).T),
                    header='time rv rv_err', comments='', fmt='%f %f %5.3f')
         file_list = save_file        
     return file_list
@@ -53,11 +78,13 @@ def kimaFit(files,save_file=None,
 
     # Initialize Model
     model = RVmodel(fix=False, npmax=max_npl, data=D, **kwargs)
+    # Set Kumaraswamy bound for eccentricity
+    model.conditional.eprior = Kumaraswamy(0.8, 3)
+    # Change period bound
+    model.conditional.Pprior = distributions.LogUniform(2, t_baseline*D.get_timespan())
     if trend_deg>0: # introduce a polynomial fit
         model.trend = True
         model.degree = trend_deg
-    if t_baseline!=1: # extend prior for orbital periods by time baseline
-        model.conditional.Pprior = distributions.LogUniform(1, t_baseline*D.get_timespan())
 
     # Change Priors
     if len(prior_dict)>0:
