@@ -24,7 +24,7 @@ def binByDay(t,v,e):
     for i,it in enumerate(tint):
         m = tint==it
         tbin[i] = np.median(t[m])
-        vbin[i] = np.average(v[m],w=1/e[m])
+        vbin[i] = np.average(v[m],weights=1/e[m])
         ebin[i] = np.sqrt(1/np.sum(1/e[m]**2))
     return tbin, vbin, ebin
 
@@ -47,7 +47,7 @@ def genKimaDataFiles(essp_data_file,save_dir,
             time, rvel, errs = df.loc[m_inst,[t_key,v_key,e_key]].to_numpy().T
             if bin_by_day:
                 time, rvel, errs = binByDay(time, rvel, errs)
-            np.savetxt(save_file, np.array([time, rvel, errs]).T),
+            np.savetxt(save_file, np.array([time, rvel, errs]).T,
                        header='time rv rv_err', comments='', fmt='%f %f %5.3f')
             file_list.append(save_file)
     else:
@@ -64,7 +64,7 @@ def genKimaDataFiles(essp_data_file,save_dir,
             tall, vall, eall = np.concatenate(tall), np.concatenate(vall), np.concatenate(eall)
             tsort = np.argsort(tall)
             time, rvel, errs = tall[tsort], vall[tsort], eall[tsort]
-        np.savetxt(save_file, np.array([time, rvel, errs]).T),
+        np.savetxt(save_file, np.array([time, rvel, errs]).T,
                    header='time rv rv_err', comments='', fmt='%f %f %5.3f')
         file_list = save_file        
     return file_list
@@ -79,7 +79,7 @@ def kimaFit(files,save_file=None,
     # Initialize Model
     model = RVmodel(fix=False, npmax=max_npl, data=D, **kwargs)
     # Set Kumaraswamy bound for eccentricity
-    model.conditional.eprior = Kumaraswamy(0.8, 3)
+    model.conditional.eprior = kima.distributions.Kumaraswamy(0.8, 3)
     # Change period bound
     model.conditional.Pprior = distributions.LogUniform(2, t_baseline*D.get_timespan())
     if trend_deg>0: # introduce a polynomial fit
