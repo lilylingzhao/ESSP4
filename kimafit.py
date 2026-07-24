@@ -145,6 +145,35 @@ def genKimaTestData(dset,kima_data_dir,err=None,rand_seed=None):
 kimaOrb_2essp = {'K':'K [m/s]','P':'P [d]','ecc':'e','w':'w [deg]','phi':'phi [deg]'}
 smryVals = ['mean','std','median','neg_sigma','pos_sigma']
 
+def sortKimaFit(df):
+    """
+    For each row, sort the planet parameter groups (P, K, ecc, w, phi)
+    by increasing P value, with zeros sorted last.
+    The input columns are numbered 0-2 (e.g. P0, P1, P2)
+    and new output columns are labeled b-d (e.g. Pb, Pc, Pd).
+    """
+    params = ['P', 'K', 'ecc', 'w', 'phi']
+    labels = ['b', 'c', 'd']
+    indices = [0, 1, 2]
+
+    # Extract P values and replace zeros with inf so they sort last
+    P_vals = df[[f'P{i}' for i in indices]].to_numpy(dtype=float)
+    P_vals_for_sort = np.where(P_vals == 0, np.inf, P_vals)
+    sort_order = np.argsort(P_vals_for_sort, axis=1)  # shape: (n_rows, 3)
+
+    for param in params:
+        # Stack the three columns for this parameter: shape (n_rows, 3)
+        param_vals = df[[f'{param}{i}' for i in indices]].to_numpy(dtype=float)
+
+        # Reorder each row according to sort_order
+        sorted_vals = param_vals[np.arange(len(df))[:, None], sort_order]
+
+        # Write new columns labeled b, c, d
+        for j, label in enumerate(labels):
+            df[f'{param}{label}'] = sorted_vals[:, j]
+
+    return df
+
 def getKimaValDict(smry_df,key):
     essp_key = kimaOrb_2essp[key[:-1]] if key[:-1] in kimaOrb_2essp.keys() else key
     key_dict = {}
@@ -152,7 +181,7 @@ def getKimaValDict(smry_df,key):
         key_dict[essp_key + f' {val}'] = smry_df[key][val]
     return key_dict
 
-def getSysDf(posteriors_df):
+def getSysDf(posteriors_df,use_ordered=True):
     # Prep DF of Summary Values
     smry_df = posteriors_df.describe(percentiles=[0.158,0.5,0.841]).T.rename(columns={'50%':'median'})
     smry_df['neg_sigma'] = smry_df['median']-smry_df['15.8%']
@@ -162,11 +191,24 @@ def getSysDf(posteriors_df):
     # Organize into a Single DF for System
     plnt_list = []
     for npln in range(3):
-        plnt_dict = {'planet':[*'bcd'][npln]}
+        pln_name = [*'bcd'][npln]
+        plnt_dict = {'planet':pln_name}
         for kima_key in smry_df.columns:
             if kima_key[:-1] in kimaOrb_2essp.keys(): # Is a planet parameter
-                if int(kima_key[-1])!=npln:
-                    continue
+                if use_ordered:
+                    if kima_key[-1].isdigit():
+                        # not the ordered column
+                        continue
+                    if kima_key[-1]!=pln_name:
+                        # not the right planet
+                        continue
+                else:
+                    if not kima_key[-1].isdigit():
+                        # not the unordered column
+                        continue
+                    if int(kima_key[-1])!=npln:
+                        # not the right planet
+                        continue
             plnt_dict |= getKimaValDict(smry_df,kima_key)
         plnt_list.append(plnt_dict)
     sys_df = pd.DataFrame(plnt_list)
